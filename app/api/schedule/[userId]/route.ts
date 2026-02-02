@@ -7,10 +7,10 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const userId = params.userId;
+    const { userId } = await params;
     const schedule = await kv.get(`schedule:${userId}`);
     
     return NextResponse.json({ schedule });
@@ -26,10 +26,10 @@ export async function GET(
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
   try {
-    const userId = params.userId;
+    const { userId } = await params;
     const { schedule } = await request.json();
     
     // KV에 저장 (만료 없음)
