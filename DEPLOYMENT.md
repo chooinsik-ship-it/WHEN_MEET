@@ -28,7 +28,8 @@ npm run dev
 
 ### 3. 프로덕션 빌드 테스트
 ```bash
-npm run build
+npm run buildCtrl + C
+npm run dev
 npm start
 ```
 
