@@ -215,13 +215,6 @@ export default function Home() {
                   title="내 시간표"
                 />
               )}
-              {activeTab === 'my' && (
-                <TimeGrid
-                  schedule={mySchedule}
-                  onChange={setMySchedule}
-                  title="내 시간표"
-                />
-              )}
 
               {activeTab === 'compare' && (
                 <div>
