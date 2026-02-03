@@ -60,6 +60,9 @@ export default function Home() {
   // 내 시간표
   const [mySchedule, setMySchedule] = useState<boolean[][]>(createEmptySchedule());
   
+  // 스케줄 로딩 상태
+  const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
+  
   // 친구 목록
   const [friends, setFriends] = useState<Friend[]>([]);
   
@@ -81,6 +84,9 @@ export default function Home() {
   const [pendingInvitations, setPendingInvitations] = useState<GroupInvitation[]>([]);
   const [currentInvitation, setCurrentInvitation] = useState<GroupInvitation | null>(null);
   
+  // 그룹 삭제 확인 모달
+  const [deleteConfirmGroup, setDeleteConfirmGroup] = useState<Group | null>(null);
+  
   // 현재 활성화된 탭
   const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
 
@@ -101,12 +107,17 @@ export default function Home() {
   const handleLogin = async (user: User) => {
     setCurrentUser(user);
     localStorage.setItem('currentUser', JSON.stringify(user));
+    setIsLoadingSchedule(true);
     
     // 저장된 시간표 불러오기
     const savedSchedule = await loadSchedule(user.id);
     if (savedSchedule) {
       setMySchedule(savedSchedule);
+    } else {
+      // 저장된 스케줄이 없으면 빈 스케줄로 초기화
+      setMySchedule(createEmptySchedule());
     }
+    setIsLoadingSchedule(false);
     
     // 저장된 그룹 불러오기
     const savedGroups = localStorage.getItem(`groups_${user.id}`);
@@ -133,6 +144,7 @@ export default function Home() {
     setGroups([]);
     setPendingInvitations([]);
     setCurrentInvitation(null);
+    setIsLoadingSchedule(false);
     setActiveTab('my');
   };
 
@@ -330,10 +342,10 @@ export default function Home() {
    * 내 시간표 변경 시 자동 저장
    */
   useEffect(() => {
-    if (currentUser) {
+    if (currentUser && !isLoadingSchedule) {
       saveSchedule(currentUser.id, mySchedule);
     }
-  }, [mySchedule, currentUser]);
+  }, [mySchedule, currentUser, isLoadingSchedule]);
 
   // 추천 문구 생성 (모든 친구 + 내 시간표 고려)
   const recommendation = friends.length > 0
@@ -604,7 +616,7 @@ export default function Home() {
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                handleDeleteGroup(group.id);
+                                setDeleteConfirmGroup(group);
                               }}
                               className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition"
                             >
@@ -661,6 +673,61 @@ export default function Home() {
           onAccept={handleAcceptInvitation}
           onDecline={handleDeclineInvitation}
         />
+      )}
+      
+      {/* 그룹 삭제 확인 모달 */}
+      {deleteConfirmGroup && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg
+                  className="w-10 h-10 text-red-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+                  />
+                </svg>
+              </div>
+              <h2 className="text-2xl font-bold text-black mb-2">
+                그룹 삭제
+              </h2>
+            </div>
+            
+            <div className="mb-6">
+              <p className="text-center text-black mb-2">
+                <span className="font-bold text-red-600">{deleteConfirmGroup.name}</span> 그룹을 삭제하시겠습니까?
+              </p>
+              <p className="text-center text-sm text-gray-500">
+                이 작업은 취소할 수 없습니다.
+              </p>
+            </div>
+            
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmGroup(null)}
+                className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
+              >
+                아니오
+              </button>
+              <button
+                onClick={() => {
+                  handleDeleteGroup(deleteConfirmGroup.id);
+                  setDeleteConfirmGroup(null);
+                }}
+                className="flex-1 px-6 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
+              >
+                예
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
