@@ -258,9 +258,17 @@ export default function Home() {
               <img 
                 src="/logo.png" 
                 alt="언제만나 로고" 
-                className="h-16 w-auto"
+                className="h-24 w-auto"
               />
-              <h1 className="text-4xl font-bold text-black">
+              <h1 
+                className="font-bold text-sky-500" 
+                style={{ 
+                  fontFamily: 'var(--font-jua)', 
+                  fontSize: '2.7rem',
+                  textShadow: '2px 2px 4px rgba(0, 0, 0, 0.1)',
+                  WebkitTextStroke: '0.5px rgba(2, 132, 199, 0.3)'
+                }}
+              >
                 언제만나
               </h1>
             </div>
@@ -270,11 +278,20 @@ export default function Home() {
               onLogout={handleLogout}
             />
           </div>
-          <p className="text-black text-center">
-            {currentUser
-              ? `${currentUser.nickname}님, 시간표를 입력하고 친구와 비교해보세요!`
-              : '닉네임을 입력하고 나만의 시간표를 관리하세요'}
-          </p>
+          {currentUser ? (
+            <div className="text-center space-y-2">
+              <p className="text-lg text-black">
+                <span className="font-bold text-blue-600">{currentUser.nickname}</span>님, 환영해요! 👋
+              </p>
+              <p className="text-sm text-gray-600">
+                <span className="font-semibold text-black">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold text-black">자동 추천</span>해드려요.
+              </p>
+            </div>
+          ) : (
+            <p className="text-black text-center">
+              닉네임을 입력하고 나만의 시간표를 관리하세요
+            </p>
+          )}
         </header>
 
         {!currentUser ? (
@@ -336,6 +353,15 @@ export default function Home() {
               >
                 그룹 관리
               </button>
+            </div>
+
+            {/* 탭 설명 */}
+            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+              <p className="text-sm text-gray-700">
+                {activeTab === 'my' && '📋 내가 바쁜 시간을 먼저 표시해요'}
+                {activeTab === 'compare' && '🔍 겹치는 여유 시간을 자동 추천해요'}
+                {activeTab === 'group' && '👥 그룹/친구를 추가하고 관리해요'}
+              </p>
             </div>
 
             {/* 탭 콘텐츠 */}
@@ -520,8 +546,8 @@ export default function Home() {
         )}
 
         {/* 푸터 */}
-        <footer className="mt-8 text-center text-sm text-black">
-          <p>Made with Next.js + Tailwind CSS</p>
+        <footer className="mt-8 text-center text-sm text-gray-500">
+          <p>WHEN MEET · Asia/Seoul 기준</p>
         </footer>
       </div>
 

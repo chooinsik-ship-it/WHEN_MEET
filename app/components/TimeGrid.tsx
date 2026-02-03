@@ -154,51 +154,77 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
   };
 
   /**
-   * 전체 스케줄 초기화
+   * 전체 스케줄 초기화 (확인 후)
    */
   const clearAll = () => {
-    const emptySchedule = Array(7).fill(null).map(() => Array(24).fill(false));
-    onChange(emptySchedule);
+    if (confirm('정말 모두 지울까요? 이 작업은 취소할 수 없어요.')) {
+      const emptySchedule = Array(7).fill(null).map(() => Array(24).fill(false));
+      onChange(emptySchedule);
+    }
   };
+
+  // 바쁜 시간 개수 계산
+  const busyCount = schedule.flat().filter(Boolean).length;
 
   return (
     <div className="w-full">
-      <div className="flex items-center justify-between mb-4">
+      {/* 빈 상태 안내 */}
+      {busyCount === 0 && (
+        <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
+          <p className="text-sm text-blue-800">
+            ✨ 아직 표시된 일정이 없어요. <span className="font-bold">드래그로 바쁜 시간을 칠해보세요!</span>
+          </p>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-bold text-black">{title}</h2>
         <button
           onClick={clearAll}
-          className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600 transition"
+          className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200"
         >
-          전체 초기화
+          초기화
         </button>
+      </div>
+
+      {/* 범례 */}
+      <div className="mb-3 flex gap-4 text-sm">
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-white border border-gray-300 rounded"></div>
+          <span className="text-gray-700">여유</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 bg-green-400 border border-gray-300 rounded"></div>
+          <span className="text-gray-700">바쁨 (일정 있음)</span>
+        </div>
       </div>
       
       <div 
         ref={gridRef}
-        className="select-none touch-none"
+        className="select-none touch-none overflow-auto max-h-[600px] border border-gray-300 rounded-lg"
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
         onPointerMove={handlePointerMove}
       >
-        <div className="grid grid-cols-[80px_repeat(24,1fr)] gap-0 border border-gray-300">
-          {/* 헤더: 시간 표시 */}
-          <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-black text-xs">
+        <div className="grid grid-cols-[100px_repeat(24,1fr)] gap-0">
+          {/* 헤더: 시간 표시 (sticky) */}
+          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 p-2 text-center font-semibold text-black text-xs">
             요일 / 시간
           </div>
           {HOURS.map((hour) => (
             <div
               key={hour}
-              className="bg-gray-100 border-b border-r border-gray-300 p-1 text-center text-xs font-semibold text-black"
+              className="sticky top-0 z-10 bg-gray-100 border-b-2 border-r border-gray-400 p-2 text-center text-xs font-semibold text-black"
             >
-              {hour}
+              {hour}시
             </div>
           ))}
 
           {/* 각 요일별 행 */}
           {DAYS.map((day, dayIdx) => (
             <React.Fragment key={day}>
-              {/* 요일 라벨 */}
-              <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-sm text-black">
+              {/* 요일 라벨 (sticky) */}
+              <div className="sticky left-0 z-10 bg-blue-50 border-b border-r-2 border-gray-400 p-3 text-center font-bold text-sm text-black">
                 {day}
               </div>
               
@@ -211,12 +237,21 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
                     data-day={dayIdx}
                     data-hour={hourIdx}
                     className={`
-                      border-b border-r border-gray-300 
+                      border-b border-r border-gray-200
                       cursor-pointer 
-                      transition-colors
-                      hover:opacity-80
-                      aspect-square
-                      ${isBusy ? 'bg-green-400' : 'bg-white'}
+                      transition-all duration-150
+                      hover:ring-2 hover:ring-blue-400 hover:z-10
+                      min-h-[32px]
+                      ${
+                        isBusy 
+                          ? 'bg-green-400 hover:bg-green-500' 
+                          : 'bg-white hover:bg-gray-100'
+                      }
+                      ${
+                        isDragging && dragMode !== null
+                          ? 'cursor-grabbing'
+                          : 'cursor-grab'
+                      }
                     `}
                     onPointerDown={() => handlePointerDown(dayIdx, hourIdx)}
                     onPointerEnter={() => handlePointerEnter(dayIdx, hourIdx)}
@@ -228,8 +263,15 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
         </div>
       </div>
       
-      <div className="mt-2 text-sm text-black">
-        💡 팁: 마우스로 드래그하여 일정을 표시하거나 지울 수 있습니다.
+      <div className="mt-4 space-y-2">
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span className="text-lg">🖌️</span>
+          <span><span className="font-semibold text-black">드래그:</span> 칸 채우기/지우기</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-600">
+          <span className="text-lg">👆</span>
+          <span><span className="font-semibold text-black">클릭:</span> 한 칸만 토글</span>
+        </div>
       </div>
     </div>
   );
