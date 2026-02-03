@@ -5,8 +5,16 @@ import TimeGrid from './components/TimeGrid';
 import OverlapGrid from './components/OverlapGrid';
 import SimpleLogin from './components/SimpleLogin';
 import GroupScheduleModal from './components/GroupScheduleModal';
+import GroupInvitationModal from './components/GroupInvitationModal';
 import { generateRecommendation } from './utils/recommendation';
-import { saveSchedule, loadSchedule } from './utils/storage';
+import { 
+  saveSchedule, 
+  loadSchedule,
+  GroupInvitation,
+  loadPendingInvitations,
+  removeGroupInvitation,
+  saveGroupInvitation
+} from './utils/storage';
 
 /**
  * 사용자 인터페이스
@@ -69,6 +77,10 @@ export default function Home() {
   const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   
+  // 그룹 초대 상태
+  const [pendingInvitations, setPendingInvitations] = useState<GroupInvitation[]>([]);
+  const [currentInvitation, setCurrentInvitation] = useState<GroupInvitation | null>(null);
+  
   // 현재 활성화된 탭
   const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
 
@@ -95,6 +107,27 @@ export default function Home() {
     if (savedSchedule) {
       setMySchedule(savedSchedule);
     }
+    // Redis에서 참여한 그룹 불러오기
+    try {
+      const response = await fetch(`/api/groups?nickname=${encodeURIComponent(user.nickname)}`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.groups && data.groups.length > 0) {
+          setGroups(data.groups);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load groups:', error);
+    }
+
+    // 그룹 초대 확인
+    setShowInvitationModal(true);    
+    // 대기 중인 그룹 초대 확인
+    const invitations = loadPendingInvitations(user.id);
+    if (invitations.length > 0) {
+      setPendingInvitations(invitations);
+      setCurrentInvitation(invitations[0]); // 첫 번째 초대 표시
+    }
   };
 
   /**
@@ -106,7 +139,70 @@ export default function Home() {
     setMySchedule(createEmptySchedule());
     setFriends([]);
     setGroups([]);
+    setPendingInvitations([]);
+    setCurrentInvitation(null);
     setActiveTab('my');
+  };
+
+  /**
+   * 그룹 초대 수락
+   */
+  const handleAcceptInvitation = (invitation: GroupInvitation) => {
+    if (!currentUser) return;
+
+    // 그룹을 내 그룹 목록에 추가
+    const newGroup: Group = {
+      id: invitation.groupId,
+      name: invitation.groupName,
+      creator: invitation.creatorNickname,
+      creatorId: invitation.creatorId,
+      members: invitation.members,
+      createdAt: invitation.createdAt,
+    };
+
+    const updatedGroups = [...groups, newGroup];
+    setGroups(updatedGroups);
+    localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+
+    // 초대 삭제
+    removeGroupInvitation(currentUser.id, invitation.groupId);
+    
+    // 다음 초대가 있으면 표시, 없으면 모달 닫기
+    const remainingInvitations = pendingInvitations.filter(
+      inv => inv.groupId !== invitation.groupId
+    );
+    setPendingInvitations(remainingInvitations);
+    
+    if (remainingInvitations.length > 0) {
+      setCurrentInvitation(remainingInvitations[0]);
+    } else {
+      setCurrentInvitation(null);
+    }
+
+    // 그룹 탭으로 이동
+    setActiveTab('group');
+  };
+
+  /**
+   * 그룹 초대 거절
+   */
+  const handleDeclineInvitation = (invitation: GroupInvitation) => {
+    if (!currentUser) return;
+
+    // 초대 삭제
+    removeGroupInvitation(currentUser.id, invitation.groupId);
+    
+    // 다음 초대가 있으면 표시, 없으면 모달 닫기
+    const remainingInvitations = pendingInvitations.filter(
+      inv => inv.groupId !== invitation.groupId
+    );
+    setPendingInvitations(remainingInvitations);
+    
+    if (remainingInvitations.length > 0) {
+      setCurrentInvitation(remainingInvitations[0]);
+    } else {
+      setCurrentInvitation(null);
+    }
   };
 
   /**
@@ -202,6 +298,22 @@ export default function Home() {
     // localStorage에 그룹 저장
     const savedGroups = [...groups, newGroup];
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(savedGroups));
+    
+    // 각 멤버에게 그룹 초대 저장
+    const invitation: GroupInvitation = {
+      groupId: newGroup.id,
+      groupName: newGroup.name,
+      creatorNickname: currentUser.nickname,
+      creatorId: currentUser.id,
+      members: members,
+      createdAt: newGroup.createdAt,
+    };
+    
+    members.forEach(memberNickname => {
+      saveGroupInvitation(memberNickname, invitation);
+    });
+    
+    alert(`그룹이 생성되었고, ${members.length}명의 멤버에게 초대가 전송되었습니다!`);
   };
 
   /**
@@ -220,6 +332,56 @@ export default function Home() {
     const updatedGroups = groups.filter(g => g.id !== groupId);
     setGroups(updatedGroups);
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+  };
+
+  /**
+   * 그룹 초대 수락
+   */
+  const handleAcceptInvitation = async (groupId: string) => {
+    if (!currentUser) return;
+
+    try {
+      const response = await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId,
+          nickname: currentUser.nickname,
+          accept: true,
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.group) {
+          // 그룹 목록에 추가
+          setGroups([...groups, data.group]);
+        }
+      }
+    } catch (error) {
+      console.error('Failed to accept invitation:', error);
+    }
+  };
+
+  /**
+   * 그룹 초대 거절
+   */
+  const handleRejectInvitation = async (groupId: string) => {
+    if (!currentUser) return;
+
+    try {
+      await fetch('/api/groups/join', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          groupId,
+          nickname: currentUser.nickname,
+          accept: false,
+        }),
+      });
+    } catch (error) {
+      console.error('Failed to reject invitation:', error);
+    }
   };
 
   /**
@@ -559,6 +721,15 @@ export default function Home() {
           groupName={selectedGroup.name}
           memberNicknames={selectedGroup.members}
           creatorNickname={selectedGroup.creator}
+        />
+      )}
+      
+      {/* 그룹 초대 모달 */}
+      {currentInvitation && (
+        <GroupInvitationModal
+          invitation={currentInvitation}
+          onAccept={handleAcceptInvitation}
+          onDecline={handleDeclineInvitation}
         />
       )}
     </div>

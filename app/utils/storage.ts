@@ -127,3 +127,102 @@ export function getAllSavedUserIds(): number[] {
     return [];
   }
 }
+
+/**
+ * 그룹 초대 인터페이스
+ */
+export interface GroupInvitation {
+  groupId: string;
+  groupName: string;
+  creatorNickname: string;
+  creatorId: number;
+  members: string[];
+  createdAt: string;
+}
+
+/**
+ * 닉네임을 사용자 ID로 변환 (일관성 있는 해시 함수)
+ */
+export function nicknameToId(nickname: string): number {
+  const hash = nickname.split('').reduce((acc, char) => {
+    return ((acc << 5) - acc) + char.charCodeAt(0);
+  }, 0);
+  return Math.abs(hash);
+}
+
+/**
+ * 특정 사용자에게 그룹 초대 저장
+ * @param userNickname 초대받을 사용자 닉네임
+ * @param invitation 그룹 초대 정보
+ */
+export function saveGroupInvitation(userNickname: string, invitation: GroupInvitation): void {
+  try {
+    const userId = nicknameToId(userNickname);
+    const key = `group_invitations_${userId}`;
+    
+    if (typeof window !== 'undefined') {
+      const existingInvitations = localStorage.getItem(key);
+      const invitations: GroupInvitation[] = existingInvitations 
+        ? JSON.parse(existingInvitations) 
+        : [];
+      
+      // 동일한 그룹 초대가 이미 있는지 확인
+      const exists = invitations.some(inv => inv.groupId === invitation.groupId);
+      if (!exists) {
+        invitations.push(invitation);
+        localStorage.setItem(key, JSON.stringify(invitations));
+      }
+    }
+  } catch (error) {
+    console.error('그룹 초대 저장 실패:', error);
+  }
+}
+
+/**
+ * 사용자의 대기 중인 그룹 초대 목록 불러오기
+ * @param userId 사용자 ID
+ * @returns 초대 목록
+ */
+export function loadPendingInvitations(userId: number): GroupInvitation[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const key = `group_invitations_${userId}`;
+      const data = localStorage.getItem(key);
+      
+      if (data) {
+        return JSON.parse(data) as GroupInvitation[];
+      }
+    }
+    return [];
+  } catch (error) {
+    console.error('그룹 초대 불러오기 실패:', error);
+    return [];
+  }
+}
+
+/**
+ * 특정 그룹 초대 삭제
+ * @param userId 사용자 ID
+ * @param groupId 그룹 ID
+ */
+export function removeGroupInvitation(userId: number, groupId: string): void {
+  try {
+    if (typeof window !== 'undefined') {
+      const key = `group_invitations_${userId}`;
+      const data = localStorage.getItem(key);
+      
+      if (data) {
+        const invitations: GroupInvitation[] = JSON.parse(data);
+        const filtered = invitations.filter(inv => inv.groupId !== groupId);
+        
+        if (filtered.length > 0) {
+          localStorage.setItem(key, JSON.stringify(filtered));
+        } else {
+          localStorage.removeItem(key);
+        }
+      }
+    }
+  } catch (error) {
+    console.error('그룹 초대 삭제 실패:', error);
+  }
+}
