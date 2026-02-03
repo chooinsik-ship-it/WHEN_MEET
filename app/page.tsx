@@ -566,7 +566,7 @@ export default function Home() {
                       </div>
                       <button
                         type="submit"
-                        className="w-full px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 hover:scale-105 transition-all duration-200 cursor-pointer"
+                        className="w-full px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
                       >
                         그룹 생성하기
                       </button>
