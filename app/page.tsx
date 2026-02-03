@@ -308,30 +308,30 @@ export default function Home() {
             <div className="flex gap-2 mb-6 border-b border-gray-300">
               <button
                 onClick={() => setActiveTab('my')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 ${
+                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'my'
                     ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 내 시간표
               </button>
               <button
                 onClick={() => setActiveTab('compare')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 ${
+                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'compare'
                     ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 친구들과 비교
               </button>
               <button
                 onClick={() => setActiveTab('group')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 ${
+                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'group'
                     ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
+                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 그룹 관리
