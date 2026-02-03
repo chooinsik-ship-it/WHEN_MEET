@@ -23,9 +23,9 @@ interface OverlapGridProps {
  * - 여러 사용자의 시간표를 겹쳐서 표시
  * - 겹침 레벨에 따라 색상 구분:
  *   0 = 모두 여유 (흰색)
- *   1명 바쁨 = 연한 노란색
- *   2명 바쁨 = 주황색
- *   3명 이상 바쁨 = 빨간색
+ *   1명 바쁨 = 연한 초록색
+ *   2명 바쁨 = 중간 초록색
+ *   3명 이상 바쁨 = 진한 초록색
  */
 export default function OverlapGrid({ schedule1, schedule2, allSchedules }: OverlapGridProps) {
   /**
@@ -45,13 +45,13 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules }: Over
   const totalPeople = allSchedules ? allSchedules.length : 2;
 
   /**
-   * 겹침 레벨에 따른 배경색 클래스 반환
+   * 겹침 레벨에 따른 배경색 클래스 반환 (초록색 계열)
    */
   const getColorClass = (level: number): string => {
     if (level === 0) return 'bg-white'; // 모두 여유
-    if (level === 1) return 'bg-yellow-100'; // 1명만 바쁨
-    if (level === 2) return 'bg-orange-200'; // 2명 바쁨
-    if (level >= 3) return 'bg-red-300'; // 3명 이상 바쁨
+    if (level === 1) return 'bg-green-100'; // 1명만 바쁨 (연한 초록)
+    if (level === 2) return 'bg-green-300'; // 2명 바쁨 (중간 초록)
+    if (level >= 3) return 'bg-green-500'; // 3명 이상 바쁨 (진한 초록)
     return 'bg-white';
   };
 
@@ -68,15 +68,15 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules }: Over
           <span className="text-black">모두 여유</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-yellow-100 border border-gray-300"></div>
+          <div className="w-4 h-4 bg-green-100 border border-gray-300"></div>
           <span className="text-black">1명 바쁨</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-orange-200 border border-gray-300"></div>
+          <div className="w-4 h-4 bg-green-300 border border-gray-300"></div>
           <span className="text-black">2명 바쁨</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-red-300 border border-gray-300"></div>
+          <div className="w-4 h-4 bg-green-500 border border-gray-300"></div>
           <span className="text-black">3명 이상 바쁨</span>
         </div>
       </div>

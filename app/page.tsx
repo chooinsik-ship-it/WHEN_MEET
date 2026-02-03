@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import TimeGrid from './components/TimeGrid';
 import OverlapGrid from './components/OverlapGrid';
 import SimpleLogin from './components/SimpleLogin';
+import GroupScheduleModal from './components/GroupScheduleModal';
 import { generateRecommendation } from './utils/recommendation';
 import { saveSchedule, loadSchedule } from './utils/storage';
 
@@ -62,6 +63,11 @@ export default function Home() {
   
   // 그룹 생성 폼
   const [groupName, setGroupName] = useState('');
+  const [memberNicknames, setMemberNicknames] = useState(''); // 쉼표로 구분
+  
+  // 모달 상태
+  const [selectedGroup, setSelectedGroup] = useState<Group | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   
   // 현재 활성화된 탭
   const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
@@ -162,23 +168,48 @@ export default function Home() {
       return;
     }
 
+    if (!memberNicknames.trim()) {
+      alert('멤버 닉네임을 입력해주세요.');
+      return;
+    }
+
     if (!currentUser) return;
+
+    // 쉼표로 구분된 닉네임 배열로 변환 (공백 제거)
+    const members = memberNicknames
+      .split(',')
+      .map(name => name.trim())
+      .filter(name => name.length > 0);
+
+    if (members.length === 0) {
+      alert('유효한 멤버 닉네임을 입력해주세요.');
+      return;
+    }
 
     const newGroup: Group = {
       id: Date.now().toString(),
       name: groupName.trim(),
       creator: currentUser.nickname,
       creatorId: currentUser.id,
-      members: friends.map(f => f.nickname),
+      members: members,
       createdAt: new Date().toISOString(),
     };
 
     setGroups([...groups, newGroup]);
     setGroupName('');
+    setMemberNicknames('');
     
     // localStorage에 그룹 저장
     const savedGroups = [...groups, newGroup];
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(savedGroups));
+  };
+
+  /**
+   * 그룹 클릭 시 모달 열기
+   */
+  const handleGroupClick = (group: Group) => {
+    setSelectedGroup(group);
+    setIsModalOpen(true);
   };
 
   /**
@@ -398,13 +429,19 @@ export default function Home() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
                         maxLength={30}
                       />
+                      <textarea
+                        value={memberNicknames}
+                        onChange={(e) => setMemberNicknames(e.target.value)}
+                        placeholder="멤버 닉네임을 쉼표로 구분하여 입력 (예: 철수, 영희, 민수)"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black resize-none"
+                        rows={3}
+                      />
                       <div className="text-sm text-gray-600">
-                        현재 추가된 친구: {friends.length > 0 ? friends.map(f => f.nickname).join(', ') : '없음'}
+                        💡 팁: 쉼표(,)로 구분하여 여러 멤버를 추가할 수 있습니다.
                       </div>
                       <button
                         type="submit"
                         className="w-full px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
-                        disabled={friends.length === 0}
                       >
                         그룹 생성하기
                       </button>
@@ -415,10 +452,10 @@ export default function Home() {
                   {groups.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-gray-500">
-                        친구를 추가한 후 그룹을 만들어보세요!
+                        그룹을 만들어 여러 친구들의 시간표를 한 번에 비교해보세요!
                       </p>
                       <p className="text-sm text-gray-400 mt-2">
-                        "친구들과 비교" 탭에서 친구를 먼저 추가해주세요.
+                        그룹명과 멤버 닉네임을 입력하여 그룹을 생성하세요.
                       </p>
                     </div>
                   ) : (
@@ -429,7 +466,8 @@ export default function Home() {
                       {groups.map((group) => (
                         <div
                           key={group.id}
-                          className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition"
+                          className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition cursor-pointer"
+                          onClick={() => handleGroupClick(group)}
                         >
                           <div className="flex justify-between items-start mb-3">
                             <div>
@@ -439,7 +477,10 @@ export default function Home() {
                               </p>
                             </div>
                             <button
-                              onClick={() => handleDeleteGroup(group.id)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteGroup(group.id);
+                              }}
                               className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition"
                             >
                               삭제
@@ -459,7 +500,7 @@ export default function Home() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-400 mt-3">
-                            생성일: {new Date(group.createdAt).toLocaleDateString('ko-KR')}
+                            생성일: {new Date(group.createdAt).toLocaleDateString('ko-KR')} | 클릭하여 스케줄 확인
                           </p>
                         </div>
                       ))}
@@ -476,6 +517,17 @@ export default function Home() {
           <p>Made with Next.js + Tailwind CSS</p>
         </footer>
       </div>
+
+      {/* 그룹 스케줄 모달 */}
+      {selectedGroup && (
+        <GroupScheduleModal
+          isOpen={isModalOpen}
+          onClose={() => setIsModalOpen(false)}
+          groupName={selectedGroup.name}
+          memberNicknames={selectedGroup.members}
+          creatorNickname={selectedGroup.creator}
+        />
+      )}
     </div>
   );
 }
