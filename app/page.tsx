@@ -25,6 +25,18 @@ interface Friend {
 }
 
 /**
+ * 그룹 인터페이스
+ */
+interface Group {
+  id: string;
+  name: string;
+  creator: string;
+  creatorId: number;
+  members: string[]; // 멤버 닉네임 배열
+  createdAt: string;
+}
+
+/**
  * 빈 스케줄 초기화 함수
  * @returns 7일 x 24시간 배열 (모두 false = 여유)
  */
@@ -45,14 +57,32 @@ export default function Home() {
   // 친구 닉네임 입력
   const [friendNickname, setFriendNickname] = useState('');
   
+  // 그룹 목록
+  const [groups, setGroups] = useState<Group[]>([]);
+  
+  // 그룹 생성 폼
+  const [groupName, setGroupName] = useState('');
+  
   // 현재 활성화된 탭
-  const [activeTab, setActiveTab] = useState<'my' | 'compare'>('my');
+  const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
+
+  /**
+   * 페이지 로드 시 localStorage에서 사용자 복원
+   */
+  useEffect(() => {
+    const savedUser = localStorage.getItem('currentUser');
+    if (savedUser) {
+      const user = JSON.parse(savedUser) as User;
+      handleLogin(user);
+    }
+  }, []);
 
   /**
    * 로그인 처리
    */
   const handleLogin = async (user: User) => {
     setCurrentUser(user);
+    localStorage.setItem('currentUser', JSON.stringify(user));
     
     // 저장된 시간표 불러오기
     const savedSchedule = await loadSchedule(user.id);
@@ -66,8 +96,10 @@ export default function Home() {
    */
   const handleLogout = () => {
     setCurrentUser(null);
+    localStorage.removeItem('currentUser');
     setMySchedule(createEmptySchedule());
     setFriends([]);
+    setGroups([]);
     setActiveTab('my');
   };
 
@@ -118,6 +150,58 @@ export default function Home() {
   const handleRemoveFriend = (friendId: number) => {
     setFriends(friends.filter(f => f.id !== friendId));
   };
+
+  /**
+   * 그룹 생성
+   */
+  const handleCreateGroup = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!groupName.trim()) {
+      alert('그룹명을 입력해주세요.');
+      return;
+    }
+
+    if (!currentUser) return;
+
+    const newGroup: Group = {
+      id: Date.now().toString(),
+      name: groupName.trim(),
+      creator: currentUser.nickname,
+      creatorId: currentUser.id,
+      members: friends.map(f => f.nickname),
+      createdAt: new Date().toISOString(),
+    };
+
+    setGroups([...groups, newGroup]);
+    setGroupName('');
+    
+    // localStorage에 그룹 저장
+    const savedGroups = [...groups, newGroup];
+    localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(savedGroups));
+  };
+
+  /**
+   * 그룹 삭제
+   */
+  const handleDeleteGroup = (groupId: string) => {
+    if (!currentUser) return;
+    const updatedGroups = groups.filter(g => g.id !== groupId);
+    setGroups(updatedGroups);
+    localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+  };
+
+  /**
+   * 그룹 불러오기
+   */
+  useEffect(() => {
+    if (currentUser) {
+      const savedGroups = localStorage.getItem(`groups_${currentUser.id}`);
+      if (savedGroups) {
+        setGroups(JSON.parse(savedGroups));
+      }
+    }
+  }, [currentUser]);
 
   /**
    * 내 시간표 변경 시 자동 저장
@@ -186,37 +270,45 @@ export default function Home() {
             <div className="flex gap-2 mb-6 border-b border-gray-300">
               <button
                 onClick={() => setActiveTab('my')}
-                className={`px-6 py-3 font-semibold transition ${
+                className={`px-6 py-3 font-semibold transition-all duration-200 ${
                   activeTab === 'my'
-                    ? 'border-b-2 border-blue-500 text-black'
-                    : 'text-black hover:text-gray-800'
+                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 내 시간표
               </button>
               <button
                 onClick={() => setActiveTab('compare')}
-                className={`px-6 py-3 font-semibold transition ${
+                className={`px-6 py-3 font-semibold transition-all duration-200 ${
                   activeTab === 'compare'
-                    ? 'border-b-2 border-blue-500 text-black'
-                    : 'text-black hover:text-gray-800'
+                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
                 }`}
               >
                 친구들과 비교
+              </button>
+              <button
+                onClick={() => setActiveTab('group')}
+                className={`px-6 py-3 font-semibold transition-all duration-200 ${
+                  activeTab === 'group'
+                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
+                    : 'text-gray-600 hover:text-black hover:bg-gray-100'
+                }`}
+              >
+                그룹 관리
               </button>
             </div>
 
             {/* 탭 콘텐츠 */}
             <div className="bg-white rounded-lg shadow-lg p-6">
-              {activeTab === 'my' && (
+              {activeTab === 'my' ? (
                 <TimeGrid
                   schedule={mySchedule}
                   onChange={setMySchedule}
                   title="내 시간표"
                 />
-              )}
-
-              {activeTab === 'compare' && (
+              ) : activeTab === 'compare' ? (
                 <div>
                   {/* 친구 추가 폼 */}
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg">
@@ -290,6 +382,88 @@ export default function Home() {
                         <p className="text-black">{recommendation}</p>
                       </div>
                     </>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  {/* 그룹 생성 폼 */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                    <h3 className="text-lg font-bold text-black mb-4">새 그룹 만들기</h3>
+                    <form onSubmit={handleCreateGroup} className="space-y-3">
+                      <input
+                        type="text"
+                        value={groupName}
+                        onChange={(e) => setGroupName(e.target.value)}
+                        placeholder="그룹명 입력 (예: 스터디 모임, 동아리 등)"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        maxLength={30}
+                      />
+                      <div className="text-sm text-gray-600">
+                        현재 추가된 친구: {friends.length > 0 ? friends.map(f => f.nickname).join(', ') : '없음'}
+                      </div>
+                      <button
+                        type="submit"
+                        className="w-full px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
+                        disabled={friends.length === 0}
+                      >
+                        그룹 생성하기
+                      </button>
+                    </form>
+                  </div>
+
+                  {/* 그룹 목록 */}
+                  {groups.length === 0 ? (
+                    <div className="text-center py-12">
+                      <p className="text-gray-500">
+                        친구를 추가한 후 그룹을 만들어보세요!
+                      </p>
+                      <p className="text-sm text-gray-400 mt-2">
+                        "친구들과 비교" 탭에서 친구를 먼저 추가해주세요.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <h3 className="text-lg font-bold text-black mb-3">
+                        내 그룹 ({groups.length}개)
+                      </h3>
+                      {groups.map((group) => (
+                        <div
+                          key={group.id}
+                          className="p-4 border border-gray-200 rounded-lg hover:shadow-md transition"
+                        >
+                          <div className="flex justify-between items-start mb-3">
+                            <div>
+                              <h4 className="text-xl font-bold text-black">{group.name}</h4>
+                              <p className="text-sm text-gray-500 mt-1">
+                                만든 사람: {group.creator}
+                              </p>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteGroup(group.id)}
+                              className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition"
+                            >
+                              삭제
+                            </button>
+                          </div>
+                          <div className="mb-2">
+                            <span className="text-sm font-semibold text-gray-700">멤버:</span>
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              {group.members.map((member, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
+                                >
+                                  {member}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                          <p className="text-xs text-gray-400 mt-3">
+                            생성일: {new Date(group.createdAt).toLocaleDateString('ko-KR')}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
               )}
