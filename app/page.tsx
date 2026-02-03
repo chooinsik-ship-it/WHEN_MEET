@@ -128,9 +128,9 @@ export default function Home() {
     }
   }, [mySchedule, currentUser]);
 
-  // 추천 문구 생성 (모든 친구 시간표 고려)
+  // 추천 문구 생성 (모든 친구 + 내 시간표 고려)
   const recommendation = friends.length > 0
-    ? generateRecommendation(mySchedule, friends[0].schedule) // 첫 번째 친구와 비교
+    ? generateRecommendation([mySchedule, ...friends.map(f => f.schedule)])
     : '';
 
   return (

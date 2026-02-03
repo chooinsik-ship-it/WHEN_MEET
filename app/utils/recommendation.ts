@@ -14,49 +14,59 @@ interface TimeSlot {
 }
 
 /**
- * 공통 여유 시간대를 찾는 함수
- * - 두 스케줄에서 둘 다 여유(false)인 시간대를 찾음
- * - 각 요일별로 연속된 시간대를 탐색
+ * 연속된 여유 시간대 인터페이스 (busyCount 추가)
+ */
+interface TimeSlotWithBusy extends TimeSlot {
+  busyCount: number; // 바쁜 사람 수
+}
+
+/**
+ * 모든 스케줄을 고려한 여유 시간대 찾기
+ * - 각 시간대별로 바쁜 사람 수를 계산
+ * - 연속된 시간대를 그룹화
  * 
- * @param schedule1 사용자1의 스케줄
- * @param schedule2 사용자2의 스케줄
- * @returns 공통 여유 시간대 배열
+ * @param allSchedules 모든 사람의 스케줄 배열
+ * @returns 시간대 배열 (바쁜 사람 수 포함)
  */
 export function findCommonFreeSlots(
-  schedule1: boolean[][],
-  schedule2: boolean[][]
-): TimeSlot[] {
-  const freeSlots: TimeSlot[] = [];
+  ...allSchedules: boolean[][][]
+): TimeSlotWithBusy[] {
+  const freeSlots: TimeSlotWithBusy[] = [];
 
   // 각 요일별로 탐색
   for (let dayIdx = 0; dayIdx < 7; dayIdx++) {
     let startHour = -1;
+    let currentBusyCount = 0;
 
     // 각 시간대 탐색
     for (let hourIdx = 0; hourIdx < 24; hourIdx++) {
-      const isBothFree = !schedule1[dayIdx][hourIdx] && !schedule2[dayIdx][hourIdx];
+      // 이 시간에 바쁜 사람 수 계산
+      const busyCount = allSchedules.filter(
+        (schedule) => schedule[dayIdx][hourIdx]
+      ).length;
 
-      if (isBothFree) {
-        // 연속 구간 시작
-        if (startHour === -1) {
-          startHour = hourIdx;
-        }
-      } else {
-        // 연속 구간 종료
-        if (startHour !== -1) {
-          const duration = hourIdx - startHour;
-          freeSlots.push({
-            dayIdx,
-            startHour,
-            endHour: hourIdx - 1,
-            duration,
-          });
-          startHour = -1;
-        }
+      // 연속 구간 체크 (바쁜 사람 수가 같으면 계속)
+      if (startHour === -1) {
+        // 새 구간 시작
+        startHour = hourIdx;
+        currentBusyCount = busyCount;
+      } else if (busyCount !== currentBusyCount) {
+        // 바쁜 사람 수가 바뀌면 이전 구간 저장
+        const duration = hourIdx - startHour;
+        freeSlots.push({
+          dayIdx,
+          startHour,
+          endHour: hourIdx - 1,
+          duration,
+          busyCount: currentBusyCount,
+        });
+        // 새 구간 시작
+        startHour = hourIdx;
+        currentBusyCount = busyCount;
       }
     }
 
-    // 요일의 마지막까지 여유 시간이 계속된 경우
+    // 요일의 마지막까지 연속된 경우
     if (startHour !== -1) {
       const duration = 24 - startHour;
       freeSlots.push({
@@ -64,6 +74,7 @@ export function findCommonFreeSlots(
         startHour,
         endHour: 23,
         duration,
+        busyCount: currentBusyCount,
       });
     }
   }
@@ -72,35 +83,42 @@ export function findCommonFreeSlots(
 }
 
 /**
- * 가장 긴 공통 여유 시간대를 찾는 함수
+ * 가장 좋은 시간대를 찾는 함수
+ * - 우선순위: 1) busyCount 낮은 순 (모두 여유 > 1명 바쁨 > 2명 바쁨...)
+ *             2) duration 긴 순
  * 
- * @param freeSlots 공통 여유 시간대 배열
- * @returns 가장 긴 시간대 또는 null
+ * @param freeSlots 시간대 배열
+ * @returns 가장 좋은 시간대 또는 null
  */
-export function findLongestSlot(freeSlots: TimeSlot[]): TimeSlot | null {
+export function findBestSlot(freeSlots: TimeSlotWithBusy[]): TimeSlotWithBusy | null {
   if (freeSlots.length === 0) return null;
 
-  return freeSlots.reduce((longest, current) => {
-    return current.duration > longest.duration ? current : longest;
+  return freeSlots.reduce((best, current) => {
+    // busyCount가 낮을수록 우선
+    if (current.busyCount < best.busyCount) return current;
+    if (current.busyCount > best.busyCount) return best;
+    
+    // busyCount가 같으면 duration이 길수록 우선
+    return current.duration > best.duration ? current : best;
   });
 }
 
 /**
  * 추천 문구 생성 함수
- * - 최소 2시간 이상의 공통 여유 시간대 중 가장 긴 구간을 찾아 추천
+ * - 모든 사람의 스케줄을 고려
+ * - 우선순위: 모두 여유 > 1명 바쁨 > 2명 바쁨 순
+ * - 같은 busyCount면 긴 시간대 우선
  * 
- * @param schedule1 사용자1의 스케줄
- * @param schedule2 사용자2의 스케줄
+ * @param allSchedules 모든 사람의 스케줄 배열 (내 스케줄 포함)
  * @param minDuration 최소 연속 시간 (기본값: 2시간)
  * @returns 추천 문구
  */
 export function generateRecommendation(
-  schedule1: boolean[][],
-  schedule2: boolean[][],
+  allSchedules: boolean[][][],
   minDuration: number = 2
 ): string {
-  // 모든 공통 여유 시간대 찾기
-  const freeSlots = findCommonFreeSlots(schedule1, schedule2);
+  // 모든 시간대 찾기
+  const freeSlots = findCommonFreeSlots(...allSchedules);
 
   // 최소 시간 이상인 것만 필터링
   const validSlots = freeSlots.filter((slot) => slot.duration >= minDuration);
@@ -109,38 +127,43 @@ export function generateRecommendation(
     return '공통으로 여유로운 시간대가 없습니다. (최소 2시간 이상 필요)';
   }
 
-  // 가장 긴 구간 찾기
-  const longest = findLongestSlot(validSlots);
+  // 가장 좋은 시간대 찾기 (busyCount 낮은 순 -> duration 긴 순)
+  const best = findBestSlot(validSlots);
 
-  if (!longest) {
+  if (!best) {
     return '추천 시간대를 찾을 수 없습니다.';
   }
 
   // 문구 생성
-  const dayName = DAYS[longest.dayIdx];
-  const { startHour, endHour } = longest;
+  const dayName = DAYS[best.dayIdx];
+  const { startHour, endHour, busyCount } = best;
+  const totalPeople = allSchedules.length;
+  const freePeople = totalPeople - busyCount;
 
-  // 시간 범위가 연속된 경우 범위로 표시
-  if (endHour - startHour >= 1) {
-    return `추천: ${dayName} ${startHour}~${endHour + 1}시에 만나세요! (${longest.duration}시간 여유)`;
+  let statusText = '';
+  if (busyCount === 0) {
+    statusText = '모두 여유로워요! 🎉';
+  } else if (busyCount === 1) {
+    statusText = `${freePeople}명 여유 (1명 바쁨)`;
   } else {
-    // 1시간만 여유인 경우 (실제로는 minDuration=2라서 발생 안 함)
-    return `추천: ${dayName} ${startHour}시에 만나세요!`;
+    statusText = `${freePeople}명 여유 (${busyCount}명 바쁨)`;
   }
+
+  return `추천: ${dayName} ${startHour}~${endHour + 1}시 - ${statusText} (${best.duration}시간)`;
 }
 
 /**
- * 모든 공통 여유 시간대를 문구로 변환 (디버깅/확장용)
+ * 모든 시간대를 문구로 변환 (디버깅/확장용)
  * 
- * @param freeSlots 공통 여유 시간대 배열
+ * @param freeSlots 시간대 배열
  * @returns 시간대 설명 배열
  */
-export function formatTimeSlots(freeSlots: TimeSlot[]): string[] {
+export function formatTimeSlots(freeSlots: TimeSlotWithBusy[]): string[] {
   return freeSlots.map((slot) => {
     const dayName = DAYS[slot.dayIdx];
-    if (slot.duration === 1) {
-      return `${dayName} ${slot.startHour}시`;
-    }
-    return `${dayName} ${slot.startHour}~${slot.endHour + 1}시 (${slot.duration}시간)`;
+    const timeRange = slot.duration === 1
+      ? `${slot.startHour}시`
+      : `${slot.startHour}~${slot.endHour + 1}시`;
+    return `${dayName} ${timeRange} (${slot.duration}시간, ${slot.busyCount}명 바쁨)`;
   });
 }
