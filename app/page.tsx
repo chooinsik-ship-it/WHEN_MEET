@@ -258,7 +258,7 @@ export default function Home() {
               <img 
                 src="/logo.png" 
                 alt="언제만나 로고" 
-                className="h-12 w-auto"
+                className="h-16 w-auto"
               />
               <h1 className="text-4xl font-bold text-black">
                 언제만나
