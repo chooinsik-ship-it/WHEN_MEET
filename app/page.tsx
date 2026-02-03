@@ -107,21 +107,13 @@ export default function Home() {
     if (savedSchedule) {
       setMySchedule(savedSchedule);
     }
-    // Redis에서 참여한 그룹 불러오기
-    try {
-      const response = await fetch(`/api/groups?nickname=${encodeURIComponent(user.nickname)}`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.groups && data.groups.length > 0) {
-          setGroups(data.groups);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load groups:', error);
+    
+    // 저장된 그룹 불러오기
+    const savedGroups = localStorage.getItem(`groups_${user.id}`);
+    if (savedGroups) {
+      setGroups(JSON.parse(savedGroups));
     }
-
-    // 그룹 초대 확인
-    setShowInvitationModal(true);    
+    
     // 대기 중인 그룹 초대 확인
     const invitations = loadPendingInvitations(user.id);
     if (invitations.length > 0) {
@@ -333,68 +325,6 @@ export default function Home() {
     setGroups(updatedGroups);
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
   };
-
-  /**
-   * 그룹 초대 수락
-   */
-  const handleAcceptInvitation = async (groupId: string) => {
-    if (!currentUser) return;
-
-    try {
-      const response = await fetch('/api/groups/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          groupId,
-          nickname: currentUser.nickname,
-          accept: true,
-        }),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.group) {
-          // 그룹 목록에 추가
-          setGroups([...groups, data.group]);
-        }
-      }
-    } catch (error) {
-      console.error('Failed to accept invitation:', error);
-    }
-  };
-
-  /**
-   * 그룹 초대 거절
-   */
-  const handleRejectInvitation = async (groupId: string) => {
-    if (!currentUser) return;
-
-    try {
-      await fetch('/api/groups/join', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          groupId,
-          nickname: currentUser.nickname,
-          accept: false,
-        }),
-      });
-    } catch (error) {
-      console.error('Failed to reject invitation:', error);
-    }
-  };
-
-  /**
-   * 그룹 불러오기
-   */
-  useEffect(() => {
-    if (currentUser) {
-      const savedGroups = localStorage.getItem(`groups_${currentUser.id}`);
-      if (savedGroups) {
-        setGroups(JSON.parse(savedGroups));
-      }
-    }
-  }, [currentUser]);
 
   /**
    * 내 시간표 변경 시 자동 저장
