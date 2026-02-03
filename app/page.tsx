@@ -254,9 +254,16 @@ export default function Home() {
         {/* 헤더 */}
         <header className="mb-8">
           <div className="flex justify-between items-center mb-4">
-            <h1 className="text-4xl font-bold text-black">
-              언제만나
-            </h1>
+            <div className="flex items-center gap-3">
+              <img 
+                src="/logo.png" 
+                alt="언제만나 로고" 
+                className="h-12 w-auto"
+              />
+              <h1 className="text-4xl font-bold text-black">
+                언제만나
+              </h1>
+            </div>
             <SimpleLogin
               currentUser={currentUser}
               onLogin={handleLogin}
