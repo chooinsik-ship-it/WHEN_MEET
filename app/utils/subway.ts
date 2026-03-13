@@ -1237,6 +1237,14 @@ export function recommendSubwayStations(
   
   // 중심점에서 가까운 순으로 정렬
   stationsWithDistance.sort((a, b) => a.distanceToCentroid - b.distanceToCentroid);
-  
-  return stationsWithDistance.slice(0, topN);
+
+  // 같은 역 이름은 가장 가까운 것 하나만 남김 (호선 중복 제거)
+  const seen = new Set<string>();
+  const deduplicated = stationsWithDistance.filter((station) => {
+    if (seen.has(station.name)) return false;
+    seen.add(station.name);
+    return true;
+  });
+
+  return deduplicated.slice(0, topN);
 }
