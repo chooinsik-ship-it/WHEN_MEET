@@ -419,11 +419,11 @@ export default function Home() {
         {/* 헤더 */}
         <header className="mb-8">
           <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-6">
               <img 
-                src="/WHENMEET_logo_clean.png" 
+                src="/WHENMEET_logo_new_clean.png" 
                 alt="언제만나 로고" 
-                className="h-12 sm:h-24 w-auto"
+                className="h-9 sm:h-18 w-auto"
               />
               <h1 
                 className="font-bold" 
