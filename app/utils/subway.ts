@@ -149,7 +149,7 @@ export const SUBWAY_STATIONS: SubwayStation[] = [
   { name: '경복궁역', line: '3호선', lat: 37.5760, lng: 126.9720 },
   { name: '안국역', line: '3호선', lat: 37.5767, lng: 126.9851 },
   { name: '종로3가역', line: '3호선', lat: 37.5711, lng: 126.9919 },
-  { name: '을지로3가역', line: '3호선', lat: 37.5660, lng: 126.9919 },
+  { name: '을지로3가역', line: '3호선', lat: 37.5660, lng: 126.9919 }, 
   { name: '충무로역', line: '3호선', lat: 37.5614, lng: 126.9941 },
   { name: '동대입구역', line: '3호선', lat: 37.5516, lng: 126.9961 },
   { name: '약수역', line: '3호선', lat: 37.5458, lng: 127.0042 },
