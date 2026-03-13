@@ -14,12 +14,15 @@ interface TimeGridProps {
 export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<boolean | null>(null);
+  const [editMode, setEditMode] = useState(false); // 모바일 편집 모드 토글
   const gridRef = useRef<HTMLDivElement>(null);
   const lastCell = useRef<{ day: number; hour: number } | null>(null);
   const isDraggingRef = useRef(false);
   const dragModeRef = useRef<boolean | null>(null);
+  const editModeRef = useRef(false);
+  editModeRef.current = editMode;
 
-  // 상위 컴포넌트를 ref에 저장 (state 없이 native 이벤트에서 사용)
+  // 최신 schedule/onChange를 ref에 저장 (native 이벤트 핸들러에서 사용)
   const scheduleRef = useRef(schedule);
   scheduleRef.current = schedule;
   const onChangeRef = useRef(onChange);
@@ -53,12 +56,10 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
     onChangeRef.current(newSchedule);
   };
 
-  // fillRef: native 이벤트 핸들러에서 항상 최신 fillCellsBetween을 참조
   const fillRef = useRef(fillCellsBetween);
   fillRef.current = fillCellsBetween;
 
   // 터치 이벤트 등록 (passive: false → preventDefault 가능)
-  // React 합성 이벤트는 iOS Safari에서 passive로 등록되어 스크롤을 막을 수 없음
   useEffect(() => {
     const grid = gridRef.current;
     if (!grid) return;
@@ -73,11 +74,14 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      // 편집 모드가 아니면 스크롤 허용
+      if (!editModeRef.current) return;
+
       const touch = e.touches[0];
       const cell = getCellAt(touch.clientX, touch.clientY);
-      if (!cell) return; // 헤더/라벨 터치 시 스크롤 허용
+      if (!cell) return;
 
-      e.preventDefault(); // 터치 드래그 시 스크롤 차단
+      e.preventDefault();
       const newMode = !scheduleRef.current[cell.day][cell.hour];
       isDraggingRef.current = true;
       dragModeRef.current = newMode;
@@ -86,7 +90,7 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!isDraggingRef.current || dragModeRef.current === null) return;
+      if (!editModeRef.current || !isDraggingRef.current || dragModeRef.current === null) return;
       e.preventDefault();
 
       const touch = e.touches[0];
@@ -120,11 +124,11 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
       grid.removeEventListener('touchend', onTouchEnd);
       grid.removeEventListener('touchcancel', onTouchEnd);
     };
-  }, []); // mount 시 1번만 등록 — 핸들러는 ref로 참조
+  }, []);
 
   // 데스크탑 마우스 드래그 핸들러
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType === 'touch') return; // 터치는 native 이벤트로 처리
+    if (e.pointerType === 'touch') return;
 
     const target = e.target as HTMLElement;
     const dayAttr = target.getAttribute('data-day');
@@ -190,12 +194,38 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
 
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-xl font-bold text-black">{title}</h2>
-        <button
-          onClick={clearAll}
-          className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200"
-        >
-          초기화
-        </button>
+        <div className="flex items-center gap-2">
+          {/* 모바일 편집 모드 토글 (스크롤 ↔ 그리기 전환) */}
+          <button
+            onClick={() => setEditMode(!editMode)}
+            className={`sm:hidden px-3 py-2 rounded-lg border text-sm font-semibold transition-all duration-200 ${
+              editMode
+                ? 'bg-brand-500 text-white border-brand-600 shadow-md'
+                : 'bg-white text-gray-600 border-gray-300'
+            }`}
+          >
+            {editMode ? '✏️ 편집중' : '✏️ 편집'}
+          </button>
+          <button
+            onClick={clearAll}
+            className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200"
+          >
+            초기화
+          </button>
+        </div>
+      </div>
+
+      {/* 모바일 편집 모드 안내 */}
+      <div className="sm:hidden mb-2">
+        {editMode ? (
+          <p className="text-xs text-brand-600 bg-brand-50 border border-brand-200 rounded px-3 py-1.5">
+            ✏️ <span className="font-semibold">편집 모드</span> — 드래그로 칸을 채우세요. 완료 후 ✏️ 버튼을 다시 눌러 스크롤 모드로 전환하세요.
+          </p>
+        ) : (
+          <p className="text-xs text-gray-500 bg-gray-50 border border-gray-200 rounded px-3 py-1.5">
+            👆 <span className="font-semibold">스크롤 모드</span> — 시간표를 넘기려면 스크롤하세요. 칸을 채우려면 <span className="font-semibold text-brand-600">✏️ 편집</span> 버튼을 누르세요.
+          </p>
+        )}
       </div>
 
       <div className="mb-3 flex gap-4 text-sm">
@@ -211,7 +241,11 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
 
       <div
         ref={gridRef}
-        className="select-none overflow-auto max-h-[55vh] sm:max-h-[600px] border border-gray-300 rounded-lg"
+        className={`select-none overflow-auto max-h-[55vh] sm:max-h-[600px] rounded-lg transition-all duration-200 ${
+          editMode
+            ? 'border-2 border-brand-400 ring-2 ring-brand-200'
+            : 'border border-gray-300'
+        }`}
         onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
@@ -264,7 +298,8 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
       <div className="mt-2 sm:mt-4 space-y-1 sm:space-y-2">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="text-lg">🖌️</span>
-          <span><span className="font-semibold text-black">드래그:</span> 칸 채우기/지우기</span>
+          <span className="hidden sm:inline"><span className="font-semibold text-black">드래그:</span> 칸 채우기/지우기</span>
+          <span className="sm:hidden"><span className="font-semibold text-black">편집 모드에서</span> 드래그로 채우기</span>
         </div>
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="text-lg">👆</span>
