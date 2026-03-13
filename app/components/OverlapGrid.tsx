@@ -113,10 +113,11 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
         </div>
       </div>
       
-      <div className="grid grid-cols-[80px_repeat(24,1fr)] gap-0 border border-gray-300">
+      <div className="overflow-x-auto">
+      <div className="grid grid-cols-[60px_repeat(24,1fr)] sm:grid-cols-[80px_repeat(24,1fr)] gap-0 border border-gray-300 min-w-[700px]">
         {/* 헤더: 시간 표시 */}
-        <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-black text-xs">
-          요일 / 시간
+        <div className="bg-gray-100 border-b border-r border-gray-300 p-1 sm:p-2 text-center font-semibold text-black text-xs">
+          요일
         </div>
         {HOURS.map((hour) => (
           <div
@@ -131,8 +132,8 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
         {DAYS.map((day, dayIdx) => (
           <React.Fragment key={day}>
             {/* 요일 라벨 */}
-            <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-sm text-black">
-              {day}
+            <div className="bg-gray-100 border-b border-r border-gray-300 p-1 sm:p-2 text-center font-semibold text-xs text-black">
+              {day.replace('요일', '')}<span className="hidden sm:inline">요일</span>
             </div>
             
             {/* 시간 칸들 - 겹침 레벨에 따라 색상 표시 */}
@@ -154,6 +155,7 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
             })}
           </React.Fragment>
         ))}
+      </div>
       </div>
     </div>
   );

@@ -33,29 +33,31 @@ export default function LocationEditor({ currentLocation, onSave }: LocationEdit
   }
 
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex flex-col sm:flex-row sm:items-center gap-2">
       <input
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="예: 강남, 홍대, 노원, 강남구, 수원시"
+        placeholder="예: 강남역, 홍대입구역, 노원역 (역 이름 또는 동네명)"
         className="flex-1 px-3 py-2 border border-brand-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black text-sm"
         maxLength={30}
         autoFocus
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); if (e.key === 'Escape') setEditing(false); }}
       />
-      <button
-        onClick={handleSave}
-        className="px-4 py-2 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition"
-      >
-        저장
-      </button>
-      <button
-        onClick={() => setEditing(false)}
-        className="px-3 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition"
-      >
-        취소
-      </button>
+      <div className="flex gap-2">
+        <button
+          onClick={handleSave}
+          className="flex-1 sm:flex-none px-4 py-2 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition"
+        >
+          저장
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="flex-1 sm:flex-none px-3 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition"
+        >
+          취소
+        </button>
+      </div>
     </div>
   );
 }

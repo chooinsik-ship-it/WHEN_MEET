@@ -28,7 +28,10 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<boolean | null>(null); // true=set, false=unset
   const gridRef = useRef<HTMLDivElement>(null);
-  const lastCell = useRef<{ day: number; hour: number } | null>(null); // 마지막 셀 좌표
+  const lastCell = useRef<{ day: number; hour: number } | null>(null);
+  // 모바일 터치 드래그를 위한 동기 ref (state는 비동기라 첫 move에서 null이 될 수 있음)
+  const isDraggingRef = useRef(false);
+  const dragModeRef = useRef<boolean | null>(null);
 
   /**
    * 두 점 사이의 모든 셀을 채우는 함수 (선 그리기)
@@ -69,42 +72,40 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
   };
 
   /**
-   * 드래그 시작
+   * 드래그 시작 (컨테이너 레벨에서 처리 - 모바일 터치 호환)
    */
-  const handlePointerDown = (dayIdx: number, hourIdx: number) => {
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+    const dayAttr = target.getAttribute('data-day');
+    const hourAttr = target.getAttribute('data-hour');
+
+    if (dayAttr === null || hourAttr === null) return; // 헤더/라벨 터치 시 무시 (스크롤 허용)
+
+    const dayIdx = parseInt(dayAttr);
+    const hourIdx = parseInt(hourAttr);
     const currentValue = schedule[dayIdx][hourIdx];
     const newMode = !currentValue;
-    
+
+    // ref에 즉시 반영 (state는 비동기라 첫 move 이벤트에서 사용 불가)
+    isDraggingRef.current = true;
+    dragModeRef.current = newMode;
+    lastCell.current = { day: dayIdx, hour: hourIdx };
+
+    // 포인터 캡처: 셀 밖으로 나가도 move/up 이벤트가 계속 컨테이너에 전달됨
+    e.currentTarget.setPointerCapture(e.pointerId);
+
     setIsDragging(true);
     setDragMode(newMode);
-    lastCell.current = { day: dayIdx, hour: hourIdx };
-    
+
     // 시작 셀 즉시 토글
     fillCellsBetween(dayIdx, hourIdx, dayIdx, hourIdx, newMode);
   };
 
   /**
-   * 드래그 중 셀 위로 이동
-   */
-  const handlePointerEnter = (dayIdx: number, hourIdx: number) => {
-    if (isDragging && dragMode !== null && lastCell.current) {
-      // 마지막 셀에서 현재 셀까지 모든 셀 채우기
-      fillCellsBetween(
-        lastCell.current.day,
-        lastCell.current.hour,
-        dayIdx,
-        hourIdx,
-        dragMode
-      );
-      lastCell.current = { day: dayIdx, hour: hourIdx };
-    }
-  };
-
-  /**
-   * 포인터 이동 처리 (빠른 드래그 대응)
+   * 드래그 중 셀 위로 이동 (onPointerEnter는 모바일에서 발생 안 함 → 컨테이너 move로 처리)
    */
   const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging || dragMode === null || !lastCell.current) return;
+    if (!isDraggingRef.current || dragModeRef.current === null || !lastCell.current) return;
     
     const element = document.elementFromPoint(e.clientX, e.clientY);
     if (!element) return;
@@ -122,7 +123,7 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
           lastCell.current.hour,
           day,
           hour,
-          dragMode
+          dragModeRef.current
         );
         lastCell.current = { day, hour };
       }
@@ -133,9 +134,11 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
    * 드래그 종료
    */
   const handlePointerUp = () => {
+    isDraggingRef.current = false;
+    dragModeRef.current = null;
+    lastCell.current = null;
     setIsDragging(false);
     setDragMode(null);
-    lastCell.current = null;
   };
 
   /**
@@ -201,15 +204,17 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
       
       <div 
         ref={gridRef}
-        className="select-none touch-none overflow-auto max-h-[600px] border border-gray-300 rounded-lg"
+        className="select-none overflow-auto max-h-[55vh] sm:max-h-[600px] border border-gray-300 rounded-lg"
+        onPointerDown={handlePointerDown}
         onPointerUp={handlePointerUp}
         onPointerLeave={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         onPointerMove={handlePointerMove}
       >
-        <div className="grid grid-cols-[100px_repeat(24,1fr)] gap-0">
+        <div className="grid grid-cols-[80px_repeat(24,1fr)] sm:grid-cols-[100px_repeat(24,1fr)] gap-0 min-w-[700px]">
           {/* 헤더: 시간 표시 (sticky) */}
-          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 p-2 text-center font-semibold text-black text-xs">
-            요일 / 시간
+          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 p-1 sm:p-2 text-center font-semibold text-black text-xs">
+            요일
           </div>
           {HOURS.map((hour) => (
             <div
@@ -224,8 +229,8 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
           {DAYS.map((day, dayIdx) => (
             <React.Fragment key={day}>
               {/* 요일 라벨 (sticky) */}
-              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 p-3 text-center font-bold text-sm text-brand-800">
-                {day}
+              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 p-1 sm:p-3 text-center font-bold text-xs sm:text-sm text-brand-800">
+                {day.replace('요일', '')}<span className="hidden sm:inline">요일</span>
               </div>
               
               {/* 시간 칸들 */}
@@ -236,6 +241,7 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
                     key={`${dayIdx}-${hourIdx}`}
                     data-day={dayIdx}
                     data-hour={hourIdx}
+                    style={{ touchAction: 'none' }}
                     className={`
                       border-b border-r border-gray-200
                       cursor-pointer 
@@ -253,8 +259,6 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
                           : 'cursor-grab'
                       }
                     `}
-                    onPointerDown={() => handlePointerDown(dayIdx, hourIdx)}
-                    onPointerEnter={() => handlePointerEnter(dayIdx, hourIdx)}
                   />
                 );
               })}
@@ -263,7 +267,8 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
         </div>
       </div>
       
-      <div className="mt-4 space-y-2">
+      <p className="mt-2 text-xs text-gray-400 text-right">← 좌우로 스크롤하세요 →</p>
+      <div className="mt-2 sm:mt-4 space-y-1 sm:space-y-2">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="text-lg">🖌️</span>
           <span><span className="font-semibold text-black">드래그:</span> 칸 채우기/지우기</span>

@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import OverlapGrid from './OverlapGrid';
-import { loadSchedule } from '../utils/storage';
+import { loadSchedule, loadUser } from '../utils/storage';
 import { generateRecommendation } from '../utils/recommendation';
+import { addressToCoordinate, recommendSubwayStations } from '../utils/subway';
 
 interface GroupScheduleModalProps {
   isOpen: boolean;
@@ -39,6 +40,8 @@ export default function GroupScheduleModal({
 }: GroupScheduleModalProps) {
   const [allSchedules, setAllSchedules] = useState<boolean[][][]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [subwayRecommendations, setSubwayRecommendations] = useState<ReturnType<typeof recommendSubwayStations>>([]);
+  const [missingLocations, setMissingLocations] = useState<string[]>([]);
 
   useEffect(() => {
     if (isOpen) {
@@ -49,17 +52,44 @@ export default function GroupScheduleModal({
   const loadMemberSchedules = async () => {
     setIsLoading(true);
     
-    // 생성자 + 멤버들의 스케줄 불러오기
     const allMembers = [creatorNickname, ...memberNicknames];
-    const schedules = await Promise.all(
-      allMembers.map(async (nickname) => {
+
+    // 스케줄 + 거주지 동시 로드
+    const [schedules, userData] = await Promise.all([
+      Promise.all(allMembers.map(async (nickname) => {
         const id = nicknameToId(nickname);
         const schedule = await loadSchedule(id);
         return schedule || createEmptySchedule();
-      })
-    );
-    
+      })),
+      Promise.all(allMembers.map(async (nickname) => {
+        const id = nicknameToId(nickname);
+        const user = await loadUser(id);
+        return { nickname, location: user?.location as string | undefined };
+      })),
+    ]);
+
     setAllSchedules(schedules);
+
+    // 거주지 기반 지하철 추천
+    const locations: Array<{ lat: number; lng: number }> = [];
+    const missing: string[] = [];
+    userData.forEach(({ nickname, location }) => {
+      if (location) {
+        const coord = addressToCoordinate(location);
+        if (coord) locations.push(coord);
+        else missing.push(nickname);
+      } else {
+        missing.push(nickname);
+      }
+    });
+
+    setMissingLocations(missing);
+    if (locations.length >= 2) {
+      setSubwayRecommendations(recommendSubwayStations(locations, 5));
+    } else {
+      setSubwayRecommendations([]);
+    }
+
     setIsLoading(false);
   };
 
@@ -129,6 +159,47 @@ export default function GroupScheduleModal({
                     만남 추천
                   </h3>
                   <p className="text-black">{recommendation}</p>
+                </div>
+              )}
+
+              {/* 지하철역 추천 */}
+              {subwayRecommendations.length > 0 && (
+                <div className="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                  <h3 className="text-lg font-bold text-black mb-3">🚇 중간 지점 지하철역 추천</h3>
+                  <div className="space-y-2">
+                    {subwayRecommendations.map((station, idx) => (
+                      <div
+                        key={idx}
+                        className="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
+                            {idx + 1}
+                          </div>
+                          <div>
+                            <p className="font-bold text-black">{station.name}</p>
+                            <p className="text-sm text-gray-600">{station.line}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm text-gray-600">평균 거리</p>
+                          <p className="font-semibold text-green-600">{station.avgDistance.toFixed(1)}km</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-500 mt-3">💡 모든 멤버의 거주지를 고려한 중간 지점입니다</p>
+                </div>
+              )}
+
+              {/* 거주지 정보 부족 */}
+              {subwayRecommendations.length === 0 && missingLocations.length > 0 && (
+                <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                  <h3 className="text-lg font-bold text-black mb-2">📍 거주지 정보가 필요해요</h3>
+                  <p className="text-sm text-gray-700">
+                    거주지 미입력 멤버: <span className="font-semibold">{missingLocations.join(', ')}</span>
+                  </p>
+                  <p className="text-sm text-gray-500 mt-1">모든 멤버가 거주지를 입력하면 중간 지점을 추천해드려요!</p>
                 </div>
               )}
             </>

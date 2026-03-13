@@ -254,31 +254,13 @@ export default function Home() {
       return;
     }
 
-    // 친구의 시간표 불러오기 (서버에서)
-    const friendSchedule = await loadSchedule(friendId) || createEmptySchedule();
-    
-    // 친구의 거주지 정보 불러오기 (localStorage에서)
-    const savedFriendData = localStorage.getItem('currentUser');
-    let friendLocation: string | undefined;
-    
-    // 모든 사용자 정보 찾기
-    const allUsers = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key?.startsWith('user_')) {
-        const userData = localStorage.getItem(key);
-        if (userData) {
-          const user = JSON.parse(userData);
-          allUsers.push(user);
-        }
-      }
-    }
-    
-    // 매칭되는 친구 찾기
-    const matchedFriend = allUsers.find(u => u.id === friendId);
-    if (matchedFriend) {
-      friendLocation = matchedFriend.location;
-    }
+    // 친구의 시간표 + 거주지 서버에서 동시 로드
+    const [friendSchedule, friendUserData] = await Promise.all([
+      loadSchedule(friendId).then(s => s || createEmptySchedule()),
+      loadUser(friendId),
+    ]);
+
+    const friendLocation = friendUserData?.location as string | undefined;
 
     setFriends([...friends, {
       id: friendId,
@@ -438,22 +420,22 @@ export default function Home() {
   })();
 
   return (
-    <div className="min-h-screen bg-brand-50 py-8 px-4">
+    <div className="min-h-screen bg-brand-50 py-4 sm:py-8 px-3 sm:px-4">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <header className="mb-8">
-          <div className="flex justify-between items-center mb-4">
+          <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
             <div className="flex items-center gap-3">
               <img 
                 src="/WHENMEET_logo_clean.png" 
                 alt="언제만나 로고" 
-                className="h-24 w-auto"
+                className="h-12 sm:h-24 w-auto"
               />
               <h1 
                 className="font-bold" 
                 style={{ 
                   fontFamily: 'var(--font-jua)', 
-                  fontSize: '2.7rem',
+                  fontSize: 'clamp(1.4rem, 5vw, 2.7rem)',
                   color: '#6B80A5',
                   textShadow: '2px 2px 4px rgba(0, 0, 0, 0.08)',
                   WebkitTextStroke: '0.5px rgba(107, 128, 165, 0.3)'
@@ -462,14 +444,16 @@ export default function Home() {
                 언제 만나
               </h1>
             </div>
-            <SimpleLogin
-              currentUser={currentUser}
-              onLogin={handleLogin}
-              onLogout={handleLogout}
-            />
+            <div className="flex justify-center sm:justify-end">
+              <SimpleLogin
+                currentUser={currentUser}
+                onLogin={handleLogin}
+                onLogout={handleLogout}
+              />
+            </div>
           </div>
           {currentUser ? (
-            <div className="text-center space-y-2">
+            <div className="hidden sm:block text-center space-y-2">
               <p className="text-lg text-black">
                 <span className="font-bold text-brand-600">{currentUser.nickname}</span>님, 환영해요! 👋
               </p>
@@ -486,10 +470,10 @@ export default function Home() {
 
         {!currentUser ? (
           // 로그인 안 한 경우
-          <div className="bg-white rounded-lg shadow-lg p-12 text-center">
+          <div className="bg-white rounded-lg shadow-lg p-6 sm:p-12 text-center">
             <div className="mb-6">
               <svg
-                className="w-24 h-24 mx-auto text-gray-300"
+                className="w-16 h-16 sm:w-24 sm:h-24 mx-auto text-gray-300"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -502,7 +486,7 @@ export default function Home() {
                 />
               </svg>
             </div>
-            <h2 className="text-2xl font-bold text-black mb-4">
+            <h2 className="text-xl sm:text-2xl font-bold text-black mb-4">
               시작하기
             </h2>
             <p className="text-gray-600 mb-6">
@@ -512,33 +496,33 @@ export default function Home() {
         ) : (
           <>
             {/* 탭 네비게이션 */}
-            <div className="flex gap-2 mb-6 border-b border-gray-300">
+            <div className="flex mb-6 border-b border-gray-300">
               <button
                 onClick={() => setActiveTab('my')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'my'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
                 }`}
               >
                 내 시간표
               </button>
               <button
                 onClick={() => setActiveTab('compare')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'compare'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
                 }`}
               >
                 친구들과 비교
               </button>
               <button
                 onClick={() => setActiveTab('group')}
-                className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'group'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
                 }`}
               >
                 그룹 관리
@@ -555,7 +539,7 @@ export default function Home() {
             </div>
 
             {/* 탭 콘텐츠 */}
-            <div className="bg-white rounded-lg shadow-lg p-6">
+            <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
               {activeTab === 'my' ? (
                 <div>
                   <TimeGrid
@@ -577,7 +561,7 @@ export default function Home() {
                 <div>
                   {/* 친구 추가 폼 */}
                   <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                    <form onSubmit={handleAddFriend} className="flex gap-2">
+                    <form onSubmit={handleAddFriend} className="flex flex-col sm:flex-row gap-2">
                       <input
                         type="text"
                         value={friendNickname}
@@ -658,7 +642,7 @@ export default function Home() {
                             {subwayRecommendations.map((station, idx) => (
                               <div
                                 key={idx}
-                                className="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition"
+                                className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md transition flex-wrap"
                               >
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
