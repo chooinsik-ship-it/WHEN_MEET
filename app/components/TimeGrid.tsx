@@ -170,8 +170,8 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
     <div className="w-full">
       {/* 빈 상태 안내 */}
       {busyCount === 0 && (
-        <div className="mb-4 p-4 bg-blue-50 border-l-4 border-blue-400 rounded">
-          <p className="text-sm text-blue-800">
+        <div className="mb-4 p-4 bg-brand-50 border-l-4 border-brand-300 rounded">
+          <p className="text-sm text-brand-700">
             ✨ 아직 표시된 일정이 없어요. <span className="font-bold">드래그로 바쁜 시간을 칠해보세요!</span>
           </p>
         </div>
@@ -224,7 +224,7 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
           {DAYS.map((day, dayIdx) => (
             <React.Fragment key={day}>
               {/* 요일 라벨 (sticky) */}
-              <div className="sticky left-0 z-10 bg-blue-50 border-b border-r-2 border-gray-400 p-3 text-center font-bold text-sm text-black">
+              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 p-3 text-center font-bold text-sm text-brand-800">
                 {day}
               </div>
               
@@ -240,7 +240,7 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
                       border-b border-r border-gray-200
                       cursor-pointer 
                       transition-all duration-150
-                      hover:ring-2 hover:ring-blue-400 hover:z-10
+                      hover:ring-2 hover:ring-brand-300 hover:z-10
                       min-h-[32px]
                       ${
                         isBusy 

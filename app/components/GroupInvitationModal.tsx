@@ -22,9 +22,9 @@ export default function GroupInvitationModal({
       <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 animate-fade-in">
         {/* 헤더 */}
         <div className="text-center mb-6">
-          <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+          <div className="w-16 h-16 bg-brand-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <svg
-              className="w-10 h-10 text-blue-500"
+              className="w-10 h-10 text-brand-500"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -45,14 +45,14 @@ export default function GroupInvitationModal({
         {/* 초대 정보 */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <p className="text-center text-black mb-4">
-            <span className="font-bold text-blue-600">{invitation.creatorNickname}</span>
-            님이 <span className="font-bold text-blue-600">{invitation.groupName}</span> 그룹에 초대하셨습니다.
+            <span className="font-bold text-brand-600">{invitation.creatorNickname}</span>
+            님이 <span className="font-bold text-brand-600">{invitation.groupName}</span> 그룹에 초대하셨습니다.
           </p>
           
           <div className="border-t border-gray-200 pt-3 mt-3">
             <p className="text-sm text-gray-600 mb-2">그룹 멤버:</p>
             <div className="flex flex-wrap gap-2">
-              <span className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full">
+              <span className="px-3 py-1 bg-brand-100 text-brand-700 text-sm rounded-full">
                 {invitation.creatorNickname} (생성자)
               </span>
               {invitation.members.map((member, idx) => (

@@ -100,13 +100,13 @@ export default function GroupScheduleModal({
               <div className="mb-6">
                 <h3 className="text-lg font-bold text-black mb-3">참여 멤버</h3>
                 <div className="flex flex-wrap gap-2">
-                  <span className="px-3 py-1 bg-blue-500 text-white text-sm rounded-full font-semibold">
+                  <span className="px-3 py-1 bg-brand-500 text-white text-sm rounded-full font-semibold">
                     {creatorNickname} (생성자)
                   </span>
                   {memberNicknames.map((nickname, idx) => (
                     <span
                       key={idx}
-                      className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
+                      className="px-3 py-1 bg-brand-100 text-brand-700 text-sm rounded-full"
                     >
                       {nickname}
                     </span>
@@ -119,11 +119,12 @@ export default function GroupScheduleModal({
                 schedule1={allSchedules[0] || createEmptySchedule()}
                 schedule2={allSchedules[1] || createEmptySchedule()}
                 allSchedules={allSchedules}
+                participantNames={[creatorNickname, ...memberNicknames]}
               />
 
               {/* 추천 문구 */}
               {recommendation && (
-                <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                <div className="mt-6 p-4 bg-brand-50 border-l-4 border-brand-400 rounded">
                   <h3 className="text-lg font-bold text-black mb-2">
                     만남 추천
                   </h3>

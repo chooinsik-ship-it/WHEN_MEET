@@ -91,6 +91,50 @@ export async function loadSchedule(userId: number): Promise<boolean[][] | null> 
 }
 
 /**
+ * 사용자 정보 저장 (서버 + 로컬)
+ */
+export async function saveUser(userId: number, userData: object): Promise<void> {
+  try {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`user_${userId}`, JSON.stringify(userData));
+    }
+    await fetch(`/api/user/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(userData),
+    });
+  } catch (error) {
+    console.error('사용자 저장 실패:', error);
+  }
+}
+
+/**
+ * 사용자 정보 불러오기 (서버 우선, 로컬 fallback)
+ */
+export async function loadUser(userId: number): Promise<Record<string, unknown> | null> {
+  try {
+    const response = await fetch(`/api/user/${userId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (data.user) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(`user_${userId}`, JSON.stringify(data.user));
+        }
+        return data.user as Record<string, unknown>;
+      }
+    }
+  } catch {
+    // 서버 실패 시 로컬 fallback
+  }
+
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(`user_${userId}`);
+    if (local) return JSON.parse(local);
+  }
+  return null;
+}
+
+/**
  * 사용자 시간표 삭제
  * @param userId 사용자 ID
  */

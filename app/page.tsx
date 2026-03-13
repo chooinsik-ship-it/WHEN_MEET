@@ -6,10 +6,14 @@ import OverlapGrid from './components/OverlapGrid';
 import SimpleLogin from './components/SimpleLogin';
 import GroupScheduleModal from './components/GroupScheduleModal';
 import GroupInvitationModal from './components/GroupInvitationModal';
+import LocationEditor from './components/LocationEditor';
 import { generateRecommendation } from './utils/recommendation';
+import { addressToCoordinate, recommendSubwayStations } from './utils/subway';
 import { 
   saveSchedule, 
   loadSchedule,
+  saveUser,
+  loadUser,
   GroupInvitation,
   loadPendingInvitations,
   removeGroupInvitation,
@@ -22,6 +26,7 @@ import {
 interface User {
   id: number;
   nickname: string;
+  location?: string;
 }
 
 /**
@@ -31,6 +36,7 @@ interface Friend {
   id: number;
   nickname: string;
   schedule: boolean[][];
+  location?: string;
 }
 
 /**
@@ -105,8 +111,18 @@ export default function Home() {
    * 로그인 처리
    */
   const handleLogin = async (user: User) => {
-    setCurrentUser(user);
-    localStorage.setItem('currentUser', JSON.stringify(user));
+    // 서버에서 저장된 사용자 정보(거주지 등) 불러와 병합
+    const serverUserData = await loadUser(user.id);
+    const mergedUser: User = serverUserData
+      ? { ...user, location: user.location ?? (serverUserData.location as string | undefined) }
+      : user;
+
+    setCurrentUser(mergedUser);
+    localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+    
+    // 사용자 정보를 서버 + 로컬에 저장 (친구가 검색할 수 있도록)
+    await saveUser(mergedUser.id, mergedUser);
+    
     setIsLoadingSchedule(true);
     
     // 저장된 시간표 불러오기
@@ -240,11 +256,35 @@ export default function Home() {
 
     // 친구의 시간표 불러오기 (서버에서)
     const friendSchedule = await loadSchedule(friendId) || createEmptySchedule();
+    
+    // 친구의 거주지 정보 불러오기 (localStorage에서)
+    const savedFriendData = localStorage.getItem('currentUser');
+    let friendLocation: string | undefined;
+    
+    // 모든 사용자 정보 찾기
+    const allUsers = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key?.startsWith('user_')) {
+        const userData = localStorage.getItem(key);
+        if (userData) {
+          const user = JSON.parse(userData);
+          allUsers.push(user);
+        }
+      }
+    }
+    
+    // 매칭되는 친구 찾기
+    const matchedFriend = allUsers.find(u => u.id === friendId);
+    if (matchedFriend) {
+      friendLocation = matchedFriend.location;
+    }
 
     setFriends([...friends, {
       id: friendId,
       nickname: friendNickname.trim(),
       schedule: friendSchedule,
+      location: friendLocation,
     }]);
 
     setFriendNickname('');
@@ -329,6 +369,18 @@ export default function Home() {
   };
 
   /**
+   * 거주지 업데이트
+   */
+  const handleUpdateLocation = async (location: string) => {
+    if (!currentUser) return;
+    const updatedUser = { ...currentUser, location: location.trim() || undefined };
+    setCurrentUser(updatedUser);
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    // 서버 + 로컬에 저장
+    await saveUser(updatedUser.id, updatedUser);
+  };
+
+  /**
    * 그룹 삭제
    */
   const handleDeleteGroup = (groupId: string) => {
@@ -352,28 +404,62 @@ export default function Home() {
     ? generateRecommendation([mySchedule, ...friends.map(f => f.schedule)])
     : '';
 
+  // 지하철역 추천 계산
+  const subwayRecommendations = (() => {
+    if (friends.length === 0 || !currentUser?.location) {
+      return [];
+    }
+    
+    // 모든 사용자의 위치 정보 수집
+    const locations = [];
+    
+    // 내 위치 추가
+    const myCoord = addressToCoordinate(currentUser.location);
+    if (myCoord) {
+      locations.push(myCoord);
+    }
+    
+    // 친구들의 위치 추가
+    friends.forEach(friend => {
+      if (friend.location) {
+        const coord = addressToCoordinate(friend.location);
+        if (coord) {
+          locations.push(coord);
+        }
+      }
+    });
+    
+    // 최소 2명 이상의 위치가 있어야 추천
+    if (locations.length < 2) {
+      return [];
+    }
+    
+    return recommendSubwayStations(locations, 5);
+  })();
+
   return (
-    <div className="min-h-screen bg-gray-50 py-8 px-4">
+    <div className="min-h-screen bg-brand-50 py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <header className="mb-8">
           <div className="flex justify-between items-center mb-4">
             <div className="flex items-center gap-3">
               <img 
-                src="/logo.png" 
+                src="/WHENMEET_logo_clean.png" 
                 alt="언제만나 로고" 
                 className="h-24 w-auto"
               />
               <h1 
-                className="font-bold text-sky-500" 
+                className="font-bold" 
                 style={{ 
                   fontFamily: 'var(--font-jua)', 
                   fontSize: '2.7rem',
-                  textShadow: '2px 2px 4px rgba(0, 0, 0, 0.1)',
-                  WebkitTextStroke: '0.5px rgba(2, 132, 199, 0.3)'
+                  color: '#6B80A5',
+                  textShadow: '2px 2px 4px rgba(0, 0, 0, 0.08)',
+                  WebkitTextStroke: '0.5px rgba(107, 128, 165, 0.3)'
                 }}
               >
-                언제만나
+                언제 만나
               </h1>
             </div>
             <SimpleLogin
@@ -385,7 +471,7 @@ export default function Home() {
           {currentUser ? (
             <div className="text-center space-y-2">
               <p className="text-lg text-black">
-                <span className="font-bold text-blue-600">{currentUser.nickname}</span>님, 환영해요! 👋
+                <span className="font-bold text-brand-600">{currentUser.nickname}</span>님, 환영해요! 👋
               </p>
               <p className="text-sm text-gray-600">
                 <span className="font-semibold text-black">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold text-black">자동 추천</span>해드려요.
@@ -431,8 +517,8 @@ export default function Home() {
                 onClick={() => setActiveTab('my')}
                 className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'my'
-                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
+                    ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 내 시간표
@@ -441,8 +527,8 @@ export default function Home() {
                 onClick={() => setActiveTab('compare')}
                 className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'compare'
-                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
+                    ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 친구들과 비교
@@ -451,8 +537,8 @@ export default function Home() {
                 onClick={() => setActiveTab('group')}
                 className={`px-6 py-3 font-semibold transition-all duration-200 rounded-t-lg ${
                   activeTab === 'group'
-                    ? 'border-b-2 border-blue-500 text-black bg-blue-50'
-                    : 'text-gray-600 hover:text-black hover:bg-blue-100 hover:scale-105 cursor-pointer'
+                    ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 hover:scale-105 cursor-pointer'
                 }`}
               >
                 그룹 관리
@@ -471,11 +557,22 @@ export default function Home() {
             {/* 탭 콘텐츠 */}
             <div className="bg-white rounded-lg shadow-lg p-6">
               {activeTab === 'my' ? (
-                <TimeGrid
-                  schedule={mySchedule}
-                  onChange={setMySchedule}
-                  title="내 시간표"
-                />
+                <div>
+                  <TimeGrid
+                    schedule={mySchedule}
+                    onChange={setMySchedule}
+                    title="내 시간표"
+                  />
+                  {/* 거주지 설정 */}
+                  <div className="mt-6 p-4 bg-brand-50 border border-brand-200 rounded-lg">
+                    <h3 className="text-base font-bold text-brand-700 mb-1">📍 거주지 설정 <span className="text-xs font-normal text-gray-400">(선택)</span></h3>
+                    <p className="text-xs text-gray-500 mb-3">입력하면 친구들과 중간 지점 지하철역을 추천해드려요</p>
+                    <LocationEditor
+                      currentLocation={currentUser.location}
+                      onSave={handleUpdateLocation}
+                    />
+                  </div>
+                </div>
               ) : activeTab === 'compare' ? (
                 <div>
                   {/* 친구 추가 폼 */}
@@ -486,12 +583,12 @@ export default function Home() {
                         value={friendNickname}
                         onChange={(e) => setFriendNickname(e.target.value)}
                         placeholder="친구 닉네임 입력"
-                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black"
                         maxLength={20}
                       />
                       <button
                         type="submit"
-                        className="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
+                        className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition"
                       >
                         친구 추가
                       </button>
@@ -508,9 +605,9 @@ export default function Home() {
                         {friends.map((friend) => (
                           <div
                             key={friend.id}
-                            className="flex items-center gap-2 px-3 py-2 bg-blue-100 rounded-lg"
+                            className="flex items-center gap-2 px-3 py-2 bg-brand-100 rounded-lg"
                           >
-                            <div className="w-6 h-6 rounded-full bg-blue-500 flex items-center justify-center text-white text-sm font-bold">
+                            <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white text-sm font-bold">
                               {friend.nickname[0].toUpperCase()}
                             </div>
                             <span className="text-black font-medium">
@@ -540,15 +637,72 @@ export default function Home() {
                         schedule1={mySchedule} 
                         schedule2={friends[0].schedule}
                         allSchedules={[mySchedule, ...friends.map(f => f.schedule)]}
+                        participantNames={[currentUser.nickname, ...friends.map(f => f.nickname)]}
                       />
                       
                       {/* 추천 문구 표시 */}
-                      <div className="mt-6 p-4 bg-blue-50 border-l-4 border-blue-500 rounded">
+                      <div className="mt-6 p-4 bg-brand-50 border-l-4 border-brand-400 rounded">
                         <h3 className="text-lg font-bold text-black mb-2">
-                          만남 추천
+                          ⏰ 시간대 추천
                         </h3>
                         <p className="text-black">{recommendation}</p>
                       </div>
+                      
+                      {/* 지하철역 추천 표시 */}
+                      {subwayRecommendations.length > 0 && (
+                        <div className="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                          <h3 className="text-lg font-bold text-black mb-3">
+                            🚇 중간 지점 지하철역 추천
+                          </h3>
+                          <div className="space-y-2">
+                            {subwayRecommendations.map((station, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition"
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
+                                    {idx + 1}
+                                  </div>
+                                  <div>
+                                    <p className="font-bold text-black">
+                                      {station.name}
+                                    </p>
+                                    <p className="text-sm text-gray-600">
+                                      {station.line}
+                                    </p>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-sm text-gray-600">
+                                    평균 거리
+                                  </p>
+                                  <p className="font-semibold text-green-600">
+                                    {station.avgDistance.toFixed(1)}km
+                                  </p>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-3">
+                            💡 모든 멤버의 거주지를 고려한 중간 지점입니다
+                          </p>
+                        </div>
+                      )}
+                      
+                      {/* 거주지 정보가 부족할 때 */}
+                      {friends.length > 0 && subwayRecommendations.length === 0 && (
+                        <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                          <h3 className="text-lg font-bold text-black mb-2">
+                            📍 거주지 정보가 필요해요
+                          </h3>
+                          <p className="text-sm text-gray-700">
+                            {!currentUser?.location && '회원님의 거주지 정보가 없습니다. '}
+                            {friends.some(f => !f.location) && '일부 친구의 거주지 정보가 없습니다. '}
+                            모두 거주지를 입력하면 중간 지점 지하철역을 추천해드릴 수 있어요!
+                          </p>
+                        </div>
+                      )}
                     </>
                   )}
                 </div>
@@ -563,14 +717,14 @@ export default function Home() {
                         value={groupName}
                         onChange={(e) => setGroupName(e.target.value)}
                         placeholder="그룹명 입력 (예: 스터디 모임, 동아리 등)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black"
                         maxLength={30}
                       />
                       <textarea
                         value={memberNicknames}
                         onChange={(e) => setMemberNicknames(e.target.value)}
                         placeholder="멤버 닉네임을 쉼표로 구분하여 입력 (예: 철수, 영희, 민수)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black resize-none"
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none"
                         rows={3}
                       />
                       <div className="text-sm text-gray-600">
@@ -578,7 +732,7 @@ export default function Home() {
                       </div>
                       <button
                         type="submit"
-                        className="w-full px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
+                        className="w-full px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
                       >
                         그룹 생성하기
                       </button>

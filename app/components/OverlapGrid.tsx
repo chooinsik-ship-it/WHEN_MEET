@@ -16,6 +16,7 @@ interface OverlapGridProps {
   schedule1: boolean[][];
   schedule2: boolean[][];
   allSchedules?: boolean[][][]; // 모든 시간표 (본인 포함)
+  participantNames?: string[];
 }
 
 /**
@@ -27,7 +28,7 @@ interface OverlapGridProps {
  *   2명 바쁨 = 중간 초록색
  *   3명 이상 바쁨 = 진한 초록색
  */
-export default function OverlapGrid({ schedule1, schedule2, allSchedules }: OverlapGridProps) {
+export default function OverlapGrid({ schedule1, schedule2, allSchedules, participantNames }: OverlapGridProps) {
   /**
    * 겹침 레벨 계산 (여러 명 고려)
    */
@@ -43,6 +44,37 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules }: Over
   };
 
   const totalPeople = allSchedules ? allSchedules.length : 2;
+
+  /**
+   * 해당 시간에 바쁜 사람 이름 목록 계산
+   */
+  const getBusyPeopleNames = (day: number, hour: number): string[] => {
+    if (allSchedules && allSchedules.length > 0) {
+      return allSchedules
+        .map((schedule, index) => ({ schedule, index }))
+        .filter(({ schedule }) => schedule[day][hour])
+        .map(({ index }) => participantNames?.[index] || `참여자${index + 1}`);
+    }
+
+    const names = participantNames && participantNames.length >= 2
+      ? participantNames
+      : ['참여자1', '참여자2'];
+
+    const busyPeople: string[] = [];
+    if (schedule1[day][hour]) busyPeople.push(names[0]);
+    if (schedule2[day][hour]) busyPeople.push(names[1]);
+    return busyPeople;
+  };
+
+  const getCellTitle = (day: number, hour: number): string => {
+    const busyPeopleNames = getBusyPeopleNames(day, hour);
+
+    if (busyPeopleNames.length === 0) {
+      return '모두 여유';
+    }
+
+    return busyPeopleNames.join(', ');
+  };
 
   /**
    * 겹침 레벨에 따른 배경색 클래스 반환 (초록색 계열)
@@ -116,7 +148,7 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules }: Over
                     aspect-square
                     ${colorClass}
                   `}
-                  title={`${overlapLevel}명 바쁨`}
+                  title={getCellTitle(dayIdx, hourIdx)}
                 />
               );
             })}

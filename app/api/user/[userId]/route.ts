@@ -4,32 +4,32 @@ const isKvConfigured =
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
 
 /**
- * GET /api/schedule/[userId]
- * 특정 사용자의 시간표 가져오기
+ * GET /api/user/[userId]
+ * 특정 사용자의 정보(거주지 등) 가져오기
  */
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
   if (!isKvConfigured) {
-    return NextResponse.json({ schedule: null });
+    return NextResponse.json({ user: null });
   }
 
   try {
     const { kv } = await import('@vercel/kv');
     const { userId } = await params;
-    const schedule = await kv.get(`schedule:${userId}`);
-    
-    return NextResponse.json({ schedule });
+    const user = await kv.get(`user:${userId}`);
+
+    return NextResponse.json({ user });
   } catch (error) {
-    console.error('Schedule fetch error:', error);
-    return NextResponse.json({ error: 'Failed to fetch schedule' }, { status: 500 });
+    console.error('User fetch error:', error);
+    return NextResponse.json({ error: 'Failed to fetch user' }, { status: 500 });
   }
 }
 
 /**
- * POST /api/schedule/[userId]
- * 시간표 저장
+ * POST /api/user/[userId]
+ * 사용자 정보(거주지 등) 저장
  */
 export async function POST(
   request: NextRequest,
@@ -42,14 +42,13 @@ export async function POST(
   try {
     const { kv } = await import('@vercel/kv');
     const { userId } = await params;
-    const { schedule } = await request.json();
-    
-    // KV에 저장 (만료 없음)
-    await kv.set(`schedule:${userId}`, schedule);
-    
+    const body = await request.json();
+
+    await kv.set(`user:${userId}`, body);
+
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Schedule save error:', error);
-    return NextResponse.json({ error: 'Failed to save schedule' }, { status: 500 });
+    console.error('User save error:', error);
+    return NextResponse.json({ error: 'Failed to save user' }, { status: 500 });
   }
 }

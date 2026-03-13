@@ -5,6 +5,7 @@ import { useState } from 'react';
 interface User {
   id: number;
   nickname: string;
+  location?: string;
 }
 
 interface SimpleLoginProps {
@@ -42,31 +43,38 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLo
 
   if (!currentUser) {
     return (
-      <form onSubmit={handleLogin} className="flex items-center gap-2">
-        <input
-          type="text"
-          value={nickname}
-          onChange={(e) => setNickname(e.target.value)}
-          placeholder="닉네임을 입력하세요"
-          className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-black"
-          maxLength={20}
-        />
-        <button
-          type="submit"
-          className="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
-        >
-          시작하기
-        </button>
+      <form onSubmit={handleLogin} className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            value={nickname}
+            onChange={(e) => setNickname(e.target.value)}
+            placeholder="닉네임 입력"
+            className="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black"
+            maxLength={20}
+          />
+          <button
+            type="submit"
+            className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition whitespace-nowrap"
+          >
+            시작하기
+          </button>
+        </div>
       </form>
     );
   }
 
   return (
     <div className="flex items-center gap-3 bg-gray-100 px-4 py-2 rounded-lg">
-      <div className="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold">
+      <div className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold">
         {currentUser.nickname[0].toUpperCase()}
       </div>
-      <span className="font-medium text-black">{currentUser.nickname}</span>
+      <div className="flex flex-col">
+        <span className="font-medium text-black">{currentUser.nickname}</span>
+        {currentUser.location && (
+          <span className="text-xs text-gray-600">📍 {currentUser.location}</span>
+        )}
+      </div>
       <button
         onClick={onLogout}
         className="px-3 py-1 bg-gray-300 text-black text-sm rounded hover:bg-gray-400 transition"

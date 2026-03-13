@@ -10,6 +10,17 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* 브랜드 컬러 팔레트 (#6B80A5 기반 파스텔) */
+  --color-brand-50:  #f4f6fb;
+  --color-brand-100: #e2e8f4;
+  --color-brand-200: #c5d1e9;
+  --color-brand-300: #9fb0d2;
+  --color-brand-400: #8998b8;
+  --color-brand-500: #6B80A5;
+  --color-brand-600: #5a6e93;
+  --color-brand-700: #4a5d80;
+  --color-brand-800: #3a4d6e;
 }
 
 @media (prefers-color-scheme: dark) {
