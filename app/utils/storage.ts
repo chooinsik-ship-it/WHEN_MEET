@@ -98,11 +98,14 @@ export async function saveUser(userId: number, userData: object): Promise<void> 
     if (typeof window !== 'undefined') {
       localStorage.setItem(`user_${userId}`, JSON.stringify(userData));
     }
-    await fetch(`/api/user/${userId}`, {
+    const response = await fetch(`/api/user/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
     });
+    if (!response.ok) {
+      console.error('saveUser 서버 응답 오류:', response.status, await response.text());
+    }
   } catch (error) {
     console.error('사용자 저장 실패:', error);
   }
