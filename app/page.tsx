@@ -111,41 +111,35 @@ export default function Home() {
    * 로그인 처리
    */
   const handleLogin = async (user: User) => {
-    // 서버에서 저장된 사용자 정보(거주지 등) 불러와 병합
+    // 데이터를 먼저 모두 로드한 뒤 state를 한 번에 설정 (useEffect가 빈 시간표를 덮어쓰는 것 방지)
     const serverUserData = await loadUser(user.id);
     const mergedUser: User = serverUserData
       ? { ...user, location: user.location ?? (serverUserData.location as string | undefined) }
       : user;
 
-    setCurrentUser(mergedUser);
-    localStorage.setItem('currentUser', JSON.stringify(mergedUser));
-    
     // 사용자 정보를 서버 + 로컬에 저장 (친구가 검색할 수 있도록)
     await saveUser(mergedUser.id, mergedUser);
-    
-    setIsLoadingSchedule(true);
-    
-    // 저장된 시간표 불러오기
+
+    // 시간표 로드
     const savedSchedule = await loadSchedule(user.id);
-    if (savedSchedule) {
-      setMySchedule(savedSchedule);
-    } else {
-      // 저장된 스케줄이 없으면 빈 스케줄로 초기화
-      setMySchedule(createEmptySchedule());
-    }
+
+    // 모든 데이터 준비 완료 후 state 일괄 설정 → useEffect가 올바른 시간표로 실행됨
+    localStorage.setItem('currentUser', JSON.stringify(mergedUser));
+    setCurrentUser(mergedUser);
+    setMySchedule(savedSchedule ?? createEmptySchedule());
     setIsLoadingSchedule(false);
-    
+
     // 저장된 그룹 불러오기
     const savedGroups = localStorage.getItem(`groups_${user.id}`);
     if (savedGroups) {
       setGroups(JSON.parse(savedGroups));
     }
-    
+
     // 대기 중인 그룹 초대 확인
     const invitations = loadPendingInvitations(user.id);
     if (invitations.length > 0) {
       setPendingInvitations(invitations);
-      setCurrentInvitation(invitations[0]); // 첫 번째 초대 표시
+      setCurrentInvitation(invitations[0]);
     }
   };
 
@@ -707,7 +701,7 @@ export default function Home() {
                       <textarea
                         value={memberNicknames}
                         onChange={(e) => setMemberNicknames(e.target.value)}
-                        placeholder="멤버 닉네임을 쉼표로 구분하여 입력 (예: 철수, 영희, 민수)"
+                        placeholder="멤버 닉네임을 쉼표로 구분하여 입력 (예: 민수, 밍숭, 갯밍숭달팽이)"
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none"
                         rows={3}
                       />
