@@ -356,7 +356,11 @@ export default function Home() {
       return ((acc << 5) - acc) + char.charCodeAt(0);
     }, 0));
 
-    if (friends.some(f => f.id === friendId)) {
+    // localStorage 기준으로 확인 (React state가 스태일할 수 있음)
+    const myStoredFriends: string[] = JSON.parse(localStorage.getItem(`friends_${currentUser!.id}`) || '[]');
+    if (myStoredFriends.includes(friendNickname.trim())) {
+      // 스태일 state 동기화
+      setFriends(prev => prev.filter(f => myStoredFriends.includes(f.nickname)));
       alert('이미 친구입니다.');
       return;
     }
@@ -401,8 +405,9 @@ export default function Home() {
       return ((acc << 5) - acc) + char.charCodeAt(0);
     }, 0));
 
-    // 이미 친구인지 확인
-    if (friends.some(f => f.id === fromId)) {
+    // 이미 친구인지 확인 (localStorage 기준 - React state가 스태일할 수 있음)
+    const myStoredFriends: string[] = JSON.parse(localStorage.getItem(`friends_${currentUser.id}`) || '[]');
+    if (myStoredFriends.includes(fromNickname)) {
       removeNotification(currentUser.id, n.id);
       setNotifications(prev => prev.filter(x => x.id !== n.id));
       return;
@@ -495,11 +500,21 @@ export default function Home() {
         const theirList: string[] = JSON.parse(localStorage.getItem(theirKey) || '[]');
         localStorage.setItem(theirKey, JSON.stringify(theirList.filter(n => n !== currentUser.nickname)));
 
-        // 상대방에게 알림 전송
+        // 상대방에게 알림 전송 (fromNickname 포함)
         saveNotification(removedFriend.nickname, {
           type: 'friend_removed',
           message: `💔 ${currentUser.nickname}님이 친구를 삭제했습니다.`,
+          fromNickname: currentUser.nickname,
         });
+
+        // 양쪽 friend_requests_sent_ 정리 (재추가 시 오류 방지)
+        const mySentKey = `friend_requests_sent_${currentUser.id}`;
+        const mySent: string[] = JSON.parse(localStorage.getItem(mySentKey) || '[]');
+        localStorage.setItem(mySentKey, JSON.stringify(mySent.filter(n => n !== removedFriend.nickname)));
+
+        const theirSentKey = `friend_requests_sent_${friendId}`;
+        const theirSent: string[] = JSON.parse(localStorage.getItem(theirSentKey) || '[]');
+        localStorage.setItem(theirSentKey, JSON.stringify(theirSent.filter(n => n !== currentUser.nickname)));
       }
     }
   };
@@ -1710,6 +1725,26 @@ export default function Home() {
                               className="flex-1 py-1 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-red-100 hover:text-red-600 transition cursor-pointer"
                             >👎 거절</button>
                           </div>
+                        </div>
+                      ) : n.type === 'friend_removed' ? (
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm text-gray-700 flex-1">{n.message}</p>
+                          <button
+                            onClick={() => {
+                              if (!currentUser) return;
+                              // 삭제한 유저를 friends state에서도 제거 (스태일 state 동기화)
+                              if (n.fromNickname) {
+                                setFriends(prev => prev.filter(f => f.nickname !== n.fromNickname));
+                                setSelectedFriendIds(prev => {
+                                  const removedId = Math.abs(n.fromNickname!.split('').reduce((acc: number, c: string) => ((acc << 5) - acc) + c.charCodeAt(0), 0));
+                                  return prev.filter(id => id !== removedId);
+                                });
+                              }
+                              removeNotification(currentUser.id, n.id);
+                              setNotifications(prev => prev.filter(x => x.id !== n.id));
+                            }}
+                            className="text-gray-300 hover:text-red-400 cursor-pointer flex-shrink-0 text-xs mt-0.5"
+                          >✕</button>
                         </div>
                       ) : (
                         <div className="flex items-start gap-2">
