@@ -617,6 +617,25 @@ export default function Home() {
   };
 
   /**
+   * 약속 초대 다시 보내기 (미수락 참여자에게만)
+   */
+  const handleResendInvite = (appt: Appointment) => {
+    if (!currentUser) return;
+    const accepted = appt.acceptedBy ?? [];
+    const pending = appt.participants.filter(p => !accepted.includes(p));
+    if (pending.length === 0) return;
+    const dayName = ['월','화','수','목','금','토','일'][appt.day];
+    pending.forEach(nickname => {
+      saveNotification(nickname, {
+        type: 'appointment_invite',
+        message: `🔔 ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 다시 보냈습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        appointment: appt,
+      });
+    });
+    alert(`${pending.join(', ')}님에게 초대를 다시 보냈습니다.`);
+  };
+
+  /**
    * 약속 취소 (+ 참여자에게 알림)
    */
   const handleCancelAppointment = (appt: Appointment) => {
@@ -1710,12 +1729,14 @@ export default function Home() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="font-bold text-black text-sm">🔔 알림</p>
                 <div className="flex items-center gap-2">
-                  {notifications.length > 0 && (
+                  {notifications.some(n => n.type !== 'friend_request' && n.type !== 'appointment_invite') && (
                     <button
                       onClick={() => {
                         if (!currentUser) return;
-                        localStorage.setItem(`notifications_${currentUser.id}`, JSON.stringify([]));
-                        setNotifications([]);
+                        const actionTypes = ['friend_request', 'appointment_invite'];
+                        const kept = notifications.filter(n => actionTypes.includes(n.type));
+                        localStorage.setItem(`notifications_${currentUser.id}`, JSON.stringify(kept));
+                        setNotifications(kept);
                       }}
                       className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer"
                     >모두 삭제</button>
@@ -1822,7 +1843,7 @@ export default function Home() {
 
       {/* 약속 취소/수정 모달 */}
       {cancelAppt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => { setCancelAppt(null); setEditAppt(null); }}>
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-[60] p-4" onClick={() => { setCancelAppt(null); setEditAppt(null); }}>
           <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
             {editAppt ? (
               /* 수정 모드 */
@@ -1949,7 +1970,20 @@ export default function Home() {
                   <span className="font-semibold">{['월','화','수','목','금','토','일'][cancelAppt.day]}요일</span>{' '}
                   {String(cancelAppt.startHour).padStart(2,'0')}:00 ~ {String(cancelAppt.endHour).padStart(2,'0')}:00
                 </p>
-                <p className="text-sm font-bold text-blue-600 mb-4">&ldquo;{cancelAppt.name}&rdquo;</p>
+                <p className="text-sm font-bold text-blue-600 mb-2">&ldquo;{cancelAppt.name}&rdquo;</p>
+                {cancelAppt.status === 'pending' && (() => {
+                  const accepted = cancelAppt.acceptedBy ?? [];
+                  const pending = cancelAppt.participants.filter(p => !accepted.includes(p));
+                  return pending.length > 0 ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2 mb-3">
+                      <p className="text-xs text-yellow-700 mb-1.5">⏳ 수락 대기 중: <span className="font-semibold">{pending.join(', ')}</span></p>
+                      <button
+                        onClick={() => handleResendInvite(cancelAppt)}
+                        className="text-xs bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold px-3 py-1 rounded-full transition cursor-pointer"
+                      >📨 초대 다시 보내기</button>
+                    </div>
+                  ) : null;
+                })()}
                 <div className="flex gap-2">
                   <button
                     onClick={() => setCancelAppt(null)}
