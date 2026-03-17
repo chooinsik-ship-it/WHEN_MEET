@@ -94,22 +94,22 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
       </h2>
       
       {/* 범례 */}
-      <div className="mb-4 flex gap-4 text-sm">
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-white border border-gray-300"></div>
-          <span className="text-black">모두 여유</span>
+      <div className="mb-4 flex flex-wrap gap-x-3 gap-y-2 text-sm">
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <div className="w-3.5 h-3.5 flex-shrink-0 bg-white border border-gray-300"></div>
+          <span className="text-black text-xs">모두 여유</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-100 border border-gray-300"></div>
-          <span className="text-black">1명 바쁨</span>
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-100 border border-gray-300"></div>
+          <span className="text-black text-xs">1명 바쁨</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-300 border border-gray-300"></div>
-          <span className="text-black">2명 바쁨</span>
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-300 border border-gray-300"></div>
+          <span className="text-black text-xs">2명 바쁨</span>
         </div>
-        <div className="flex items-center gap-2">
-          <div className="w-4 h-4 bg-green-500 border border-gray-300"></div>
-          <span className="text-black">3명 이상 바쁨</span>
+        <div className="flex items-center gap-1.5 whitespace-nowrap">
+          <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-500 border border-gray-300"></div>
+          <span className="text-black text-xs">3명 이상 바쁨</span>
         </div>
       </div>
       
