@@ -724,8 +724,19 @@ export default function Home() {
   const handleAcceptInvite = (n: AppNotification) => {
     if (!currentUser || !n.appointment) return;
     const appt = n.appointment;
-    // 나를 acceptedBy에 추가
-    const updatedAcceptedBy = [...new Set([...(appt.acceptedBy ?? [appt.participants[0]]), currentUser.nickname])];
+    const creator = appt.participants[0];
+
+    // 알림에 저장된 acceptedBy는 생성 시점 스냅샷이라 다른 참여자의 수락이 반영 안 됨.
+    // creator의 localStorage에서 최신 acceptedBy를 읽어 베이스로 사용한다.
+    let latestAcceptedBy: string[] = appt.acceptedBy ?? [appt.participants[0]];
+    try {
+      const creatorId = nicknameToId(creator);
+      const creatorAppts: Appointment[] = JSON.parse(localStorage.getItem(`appointments_${creatorId}`) || '[]');
+      const creatorAppt = creatorAppts.find(a => a.id === appt.id);
+      if (creatorAppt?.acceptedBy) latestAcceptedBy = creatorAppt.acceptedBy;
+    } catch { /* noop */ }
+
+    const updatedAcceptedBy = [...new Set([...latestAcceptedBy, currentUser.nickname])];
     const allAccepted = appt.participants.every(p => updatedAcceptedBy.includes(p));
     const updatedAppt: Appointment = {
       ...appt,
@@ -745,7 +756,6 @@ export default function Home() {
     localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(newList));
 
     // 작성자의 localStorage도 acceptedBy 업데이트
-    const creator = appt.participants[0];
     if (creator !== currentUser.nickname) {
       updateAppointmentForUser(creator, updatedAppt);
       const dayName = ['월','화','수','목','금','토','일'][appt.day];
@@ -754,6 +764,15 @@ export default function Home() {
         message: allAccepted
           ? `🎉 [${appt.name}] 약속에 모든 참여자가 수락했습니다! (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`
           : `✅ ${currentUser.nickname}님이 [${appt.name}] 약속을 수락했습니다. (${updatedAcceptedBy.length}/${appt.participants.length}명 수락)`,
+      });
+    }
+
+    // 전원 수락 시 이미 수락한 참여자들의 localStorage도 confirmed로 동기화
+    if (allAccepted) {
+      appt.participants.forEach(p => {
+        if (p !== currentUser.nickname && p !== creator) {
+          updateAppointmentForUser(p, updatedAppt);
+        }
       });
     }
 
@@ -1690,7 +1709,19 @@ export default function Home() {
             <div className="absolute bottom-14 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="font-bold text-black text-sm">🔔 알림</p>
-                <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                <div className="flex items-center gap-2">
+                  {notifications.some(n => !n.read) && (
+                    <button
+                      onClick={() => {
+                        if (!currentUser) return;
+                        markNotificationsRead(currentUser.id);
+                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                      }}
+                      className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer"
+                    >모두 읽음</button>
+                  )}
+                  <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+                </div>
               </div>
               {notifications.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">알림이 없어요.</p>
@@ -1787,7 +1818,7 @@ export default function Home() {
                 {notifications.filter(n => !n.read).length}
               </span>
             )}
-          </button>
+          </button>1
         </div>
       )}
 
