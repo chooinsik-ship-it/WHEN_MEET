@@ -316,7 +316,7 @@ export function saveNotification(userNickname: string, notification: Omit<AppNot
       const existing: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
       existing.unshift({
         ...notification,
-        id: Date.now().toString(),
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
         read: false,
         createdAt: new Date().toISOString(),
       });

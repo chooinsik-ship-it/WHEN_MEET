@@ -251,7 +251,15 @@ export default function Home() {
   const handleAcceptInvitation = (invitation: GroupInvitation) => {
     if (!currentUser) return;
 
-    // 그룹을 내 그룹 목록에 추가
+    // 그룹을 내 그룹 목록에 추가 (중복 방지)
+    if (groups.some(g => g.id === invitation.groupId)) {
+      removeGroupInvitation(currentUser.id, invitation.groupId);
+      const remainingInvitations = pendingInvitations.filter(inv => inv.groupId !== invitation.groupId);
+      setPendingInvitations(remainingInvitations);
+      setCurrentInvitation(remainingInvitations.length > 0 ? remainingInvitations[0] : null);
+      return;
+    }
+
     const newGroup: Group = {
       id: invitation.groupId,
       name: invitation.groupName,
@@ -484,7 +492,7 @@ export default function Home() {
   /**
    * 그룹 생성
    */
-  const handleCreateGroup = (e: React.FormEvent) => {
+  const handleCreateGroup = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!groupName.trim()) {
@@ -500,8 +508,23 @@ export default function Home() {
       .map(name => name.trim())
       .filter(name => name.length > 0);
 
+    // 존재하지 않는 멤버 닉네임 검증
+    if (members.length > 0) {
+      const checkResults = await Promise.all(
+        members.map(async (nickname) => {
+          const userData = await loadUser(nicknameToId(nickname));
+          return { nickname, exists: userData !== null };
+        })
+      );
+      const notFound = checkResults.filter(r => !r.exists).map(r => r.nickname);
+      if (notFound.length > 0) {
+        alert(`존재하지 않는 유저입니다: ${notFound.join(', ')}`);
+        return;
+      }
+    }
+
     const newGroup: Group = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: groupName.trim(),
       creator: currentUser.nickname,
       creatorId: currentUser.id,
@@ -636,7 +659,7 @@ export default function Home() {
       return;
     }
     const appt: Appointment = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: newApptName.trim() || '약속',
       day: newApptDay,
       startHour: newApptStart,
@@ -747,7 +770,7 @@ export default function Home() {
       return;
     }
     const appt: Appointment = {
-      id: Date.now().toString(),
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: groupApptName.trim() || '약속',
       day: groupApptDay,
       startHour: groupApptStart,
@@ -1601,9 +1624,9 @@ export default function Home() {
                           <div className="mb-2">
                             <span className="text-sm font-semibold text-gray-700">멤버:</span>
                             <div className="flex flex-wrap gap-2 mt-2">
-                              {group.members.map((member, idx) => (
+                              {group.members.map((member) => (
                                 <span
-                                  key={idx}
+                                  key={member}
                                   className="px-3 py-1 bg-blue-100 text-blue-700 text-sm rounded-full"
                                 >
                                   {member}
@@ -1884,7 +1907,7 @@ export default function Home() {
             if (!currentUser || !selectedGroup) return;
             if (startHour >= endHour) { alert('종료 시간은 시작 시간보다 늦어야 합니다.'); return; }
             const appt: Appointment = {
-              id: Date.now().toString(),
+              id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
               name: name || '약속',
               day, startHour, endHour,
               participants: [currentUser.nickname, ...selectedGroup.members.filter(m => m !== currentUser.nickname)],
