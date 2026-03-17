@@ -116,8 +116,54 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
     reader.readAsDataURL(file);
   };
 
+  // 이전 구 계정 삭제 (닉네임 변경 후 남은 자투 정리용)
+  const [oldNicknameToDelete, setOldNicknameToDelete] = useState('');
+  const [deleteOldPw, setDeleteOldPw] = useState('');
+  const [deleteOldError, setDeleteOldError] = useState('');
+  const [deleteOldLoading, setDeleteOldLoading] = useState(false);
+  const [deleteOldSuccess, setDeleteOldSuccess] = useState(false);
+  const [showDeleteOld, setShowDeleteOld] = useState(false);
+
+  const handleDeleteOldAccount = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setDeleteOldError('');
+    if (!oldNicknameToDelete.trim()) {
+      setDeleteOldError('이전 닉네임을 입력해주세요.');
+      return;
+    }
+    if (!deleteOldPw.trim()) {
+      setDeleteOldError('비밀번호를 입력해주세요.');
+      return;
+    }
+    if (!currentUser) return;
+    const oldId = Math.abs(
+      oldNicknameToDelete.trim().split('').reduce((acc, char) => ((acc << 5) - acc) + char.charCodeAt(0), 0)
+    );
+    setDeleteOldLoading(true);
+    try {
+      const res = await fetch(`/api/auth/${oldId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: deleteOldPw }),
+      });
+      const data = await res.json();
+      if (!data.success) {
+        setDeleteOldError(data.error || '삭제에 실패했습니다.');
+        return;
+      }
+      setDeleteOldSuccess(true);
+      setOldNicknameToDelete('');
+      setDeleteOldPw('');
+    } catch {
+      setDeleteOldError('서버 오류가 발생했습니다.');
+    } finally {
+      setDeleteOldLoading(false);
+    }
+  };
+
   const handleNicknameChange = async (e: React.FormEvent) => {
     e.preventDefault();
+    setNicknameError('');
     setNicknameError('');
 
     if (!newNickname.trim()) {
@@ -136,29 +182,27 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
 
     setNicknameLoading(true);
     try {
-      const verifyRes = await fetch(`/api/auth/${currentUser.id}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newNicknamePw }),
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyData.success) {
-        setNicknameError('비밀번호가 틀렸습니다.');
-        return;
-      }
-
       const newId = Math.abs(
         newNickname.trim().split('').reduce((acc, char) => {
           return ((acc << 5) - acc) + char.charCodeAt(0);
         }, 0)
       );
 
-      // 새 닉네임으로 동일 비밀번호 등록
-      await fetch(`/api/auth/${newId}`, {
+      // 기존 데이터를 새 ID로 이전
+      const res = await fetch('/api/rename', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: newNicknamePw }),
+        body: JSON.stringify({
+          oldUserId: String(currentUser.id),
+          newUserId: String(newId),
+          password: newNicknamePw,
+        }),
       });
+      const data = await res.json();
+      if (!data.success) {
+        setNicknameError(data.error || '닉네임 변경에 실패했습니다.');
+        return;
+      }
 
       closeModal();
       onLogout();
@@ -313,7 +357,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
         </div>
         <button
           onClick={onLogout}
-          className="px-3 py-1 bg-gray-300 text-white text-sm rounded hover:bg-gray-400 transition cursor-pointer"
+          className="px-3 py-1 bg-gray-300 text-black text-sm rounded hover:bg-gray-400 transition cursor-pointer"
         >
           로그아웃
         </button>
@@ -417,41 +461,87 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
 
               {/* 닉네임 변경 탭 */}
               {profileTab === 'nickname' && (
-                <form onSubmit={handleNicknameChange} className="flex flex-col gap-3">
-                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700">
-                    ⚠️ 닉네임을 변경하면 새 계정으로 전환됩니다. 친구들이 새 닉네임으로 다시 추가해야 해요.
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">새 닉네임</label>
-                    <input
-                      type="text"
-                      value={newNickname}
-                      onChange={(e) => setNewNickname(e.target.value)}
-                      placeholder="새 닉네임 입력"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
-                      maxLength={20}
-                      autoFocus
-                    />
-                  </div>
-                  <div>
-                    <label className="text-sm text-gray-600 mb-1 block">현재 비밀번호 (본인 확인)</label>
-                    <input
-                      type="password"
-                      value={newNicknamePw}
-                      onChange={(e) => setNewNicknamePw(e.target.value)}
-                      placeholder="현재 비밀번호"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
-                      maxLength={30}
-                    />
-                  </div>
-                  {nicknameError && <p className="text-xs text-red-500">{nicknameError}</p>}
-                  <div className="flex gap-2">
-                    <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer">취소</button>
-                    <button type="submit" disabled={nicknameLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60 cursor-pointer">
-                      {nicknameLoading ? '변경 중...' : '변경하기'}
+                <div className="flex flex-col gap-4">
+                  <form onSubmit={handleNicknameChange} className="flex flex-col gap-3">
+                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-xs text-blue-700">
+                      ℹ️ 시간표·거주지 설정은 그대로 이전됩니다. 단, 친구들의 목록에는 새 닉네임으로 다시 추가해야 해요.
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">새 닉네임</label>
+                      <input
+                        type="text"
+                        value={newNickname}
+                        onChange={(e) => setNewNickname(e.target.value)}
+                        placeholder="새 닉네임 입력"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        maxLength={20}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">현재 비밀번호 (본인 확인)</label>
+                      <input
+                        type="password"
+                        value={newNicknamePw}
+                        onChange={(e) => setNewNicknamePw(e.target.value)}
+                        placeholder="현재 비밀번호"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        maxLength={30}
+                      />
+                    </div>
+                    {nicknameError && <p className="text-xs text-red-500">{nicknameError}</p>}
+                    <div className="flex gap-2">
+                      <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer">취소</button>
+                      <button type="submit" disabled={nicknameLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60 cursor-pointer">
+                        {nicknameLoading ? '변경 중...' : '변경하기'}
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* 이전 계정 정리 */}
+                  <div className="border-t border-gray-200 pt-3">
+                    <button
+                      type="button"
+                      onClick={() => { setShowDeleteOld(!showDeleteOld); setDeleteOldError(''); setDeleteOldSuccess(false); }}
+                      className="text-xs text-gray-400 hover:text-red-500 transition cursor-pointer"
+                    >
+                      🗑 이전에 쓰던 닉네임 계정 삭제하기
                     </button>
+                    {showDeleteOld && (
+                      deleteOldSuccess ? (
+                        <p className="mt-2 text-xs text-green-600 font-semibold">✅ 이전 계정이 삭제되었습니다.</p>
+                      ) : (
+                        <form onSubmit={handleDeleteOldAccount} className="mt-2 flex flex-col gap-2">
+                          <p className="text-xs text-gray-500">닉네임을 변경하기 전 계정을 삭제합니다.</p>
+                          <input
+                            type="text"
+                            value={oldNicknameToDelete}
+                            onChange={(e) => setOldNicknameToDelete(e.target.value)}
+                            placeholder="삭제할 이전 닉네임"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                            maxLength={20}
+                          />
+                          <input
+                            type="password"
+                            value={deleteOldPw}
+                            onChange={(e) => setDeleteOldPw(e.target.value)}
+                            placeholder="비밀번호"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-red-300"
+                            maxLength={30}
+                          />
+                          {deleteOldError && <p className="text-xs text-red-500">{deleteOldError}</p>}
+                          <button
+                            type="submit"
+                            disabled={deleteOldLoading}
+                            className="py-1.5 bg-red-500 text-white rounded-lg text-sm hover:bg-red-600 transition disabled:opacity-60 cursor-pointer"
+                          >
+                            {deleteOldLoading ? '삭제 중...' : '삭제'}
+                          </button>
+                        </form>
+                      )
+                    )}
                   </div>
-                </form>
+                </div>
               )}
 
               {/* 비밀번호 변경 탭 */}

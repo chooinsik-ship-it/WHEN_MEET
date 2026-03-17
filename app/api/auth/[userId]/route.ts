@@ -88,3 +88,47 @@ export async function PATCH(
     return NextResponse.json({ success: false, error: '서버 오류가 발생했습니다.' }, { status: 500 });
   }
 }
+
+/**
+ * DELETE /api/auth/[userId]
+ * 계정 삭제: 비밀번호 검증 후 해당 userId의 모든 KV 데이터 제거
+ * Body: { password }
+ */
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ userId: string }> }
+) {
+  const { userId } = await params;
+  const { password } = await request.json();
+
+  if (!password) {
+    return NextResponse.json({ success: false, error: '비밀번호를 입력해주세요.' }, { status: 400 });
+  }
+
+  if (!isKvConfigured) {
+    return NextResponse.json({ success: true });
+  }
+
+  try {
+    const { kv } = await import('@vercel/kv');
+    const storedHash = await kv.get<string>(`password:${userId}`);
+
+    if (!storedHash) {
+      return NextResponse.json({ success: false, error: '계정을 찾을 수 없습니다.' }, { status: 404 });
+    }
+    if (storedHash !== hashPassword(password)) {
+      return NextResponse.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
+    }
+
+    await Promise.all([
+      kv.del(`password:${userId}`),
+      kv.del(`schedule:${userId}`),
+      kv.del(`user:${userId}`),
+    ]);
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('[auth DELETE] error:', error);
+    return NextResponse.json({ success: false, error: '서버 오류가 발생했습니다.' }, { status: 500 });
+  }
+}
