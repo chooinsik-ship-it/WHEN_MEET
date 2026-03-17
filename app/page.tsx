@@ -75,6 +75,9 @@ export default function Home() {
   // 친구 닉네임 입력
   const [friendNickname, setFriendNickname] = useState('');
   
+  // 비교할 친구 선택 (ID 목록)
+  const [selectedFriendIds, setSelectedFriendIds] = useState<number[]>([]);
+  
   // 그룹 목록
   const [groups, setGroups] = useState<Group[]>([]);
   
@@ -129,6 +132,30 @@ export default function Home() {
     setMySchedule(savedSchedule ?? createEmptySchedule());
     setIsLoadingSchedule(false);
 
+    // 저장된 친구 목록 불러오기 (닉네임 → 서버에서 시간표 재로드)
+    const savedFriendNicknames = localStorage.getItem(`friends_${user.id}`);
+    if (savedFriendNicknames) {
+      const nicknames: string[] = JSON.parse(savedFriendNicknames);
+      const loadedFriends = await Promise.all(
+        nicknames.map(async (nickname) => {
+          const id = Math.abs(nickname.split('').reduce((acc: number, char: string) => {
+            return ((acc << 5) - acc) + char.charCodeAt(0);
+          }, 0));
+          const [schedule, userData] = await Promise.all([
+            loadSchedule(id).then((s) => s || createEmptySchedule()),
+            loadUser(id),
+          ]);
+          return {
+            id,
+            nickname,
+            schedule,
+            location: userData?.location as string | undefined,
+          };
+        })
+      );
+      setFriends(loadedFriends);
+    }
+
     // 저장된 그룹 불러오기
     const savedGroups = localStorage.getItem(`groups_${user.id}`);
     if (savedGroups) {
@@ -151,6 +178,7 @@ export default function Home() {
     localStorage.removeItem('currentUser');
     setMySchedule(createEmptySchedule());
     setFriends([]);
+    setSelectedFriendIds([]);
     setGroups([]);
     setPendingInvitations([]);
     setCurrentInvitation(null);
@@ -256,12 +284,17 @@ export default function Home() {
 
     const friendLocation = friendUserData?.location as string | undefined;
 
-    setFriends([...friends, {
+    const newFriend = {
       id: friendId,
       nickname: friendNickname.trim(),
       schedule: friendSchedule,
       location: friendLocation,
-    }]);
+    };
+    const updatedFriends = [...friends, newFriend];
+    setFriends(updatedFriends);
+    if (currentUser) {
+      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+    }
 
     setFriendNickname('');
   };
@@ -270,7 +303,12 @@ export default function Home() {
    * 친구 제거
    */
   const handleRemoveFriend = (friendId: number) => {
-    setFriends(friends.filter(f => f.id !== friendId));
+    const updatedFriends = friends.filter(f => f.id !== friendId);
+    setFriends(updatedFriends);
+    setSelectedFriendIds(prev => prev.filter(id => id !== friendId));
+    if (currentUser) {
+      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+    }
   };
 
   /**
@@ -375,28 +413,28 @@ export default function Home() {
     }
   }, [mySchedule, currentUser, isLoadingSchedule]);
 
-  // 추천 문구 생성 (모든 친구 + 내 시간표 고려)
-  const recommendation = friends.length > 0
-    ? generateRecommendation([mySchedule, ...friends.map(f => f.schedule)])
+  // 비교 선택된 친구들
+  const selectedFriends = friends.filter(f => selectedFriendIds.includes(f.id));
+
+  // 추천 문구 생성 (선택된 친구 + 내 시간표 고려)
+  const recommendation = selectedFriends.length > 0
+    ? generateRecommendation([mySchedule, ...selectedFriends.map(f => f.schedule)])
     : '';
 
   // 지하철역 추천 계산
   const subwayRecommendations = (() => {
-    if (friends.length === 0 || !currentUser?.location) {
+    if (selectedFriends.length === 0 || !currentUser?.location) {
       return [];
     }
     
-    // 모든 사용자의 위치 정보 수집
     const locations = [];
     
-    // 내 위치 추가
     const myCoord = addressToCoordinate(currentUser.location);
     if (myCoord) {
       locations.push(myCoord);
     }
     
-    // 친구들의 위치 추가
-    friends.forEach(friend => {
+    selectedFriends.forEach(friend => {
       if (friend.location) {
         const coord = addressToCoordinate(friend.location);
         if (coord) {
@@ -405,7 +443,6 @@ export default function Home() {
       }
     });
     
-    // 최소 2명 이상의 위치가 있어야 추천
     if (locations.length < 2) {
       return [];
     }
@@ -573,36 +610,7 @@ export default function Home() {
                     </form>
                   </div>
 
-                  {/* 친구 목록 */}
-                  {friends.length > 0 && (
-                    <div className="mb-6">
-                      <h3 className="text-lg font-bold text-black mb-3">
-                        비교 중인 친구들 ({friends.length}명)
-                      </h3>
-                      <div className="flex flex-wrap gap-2">
-                        {friends.map((friend) => (
-                          <div
-                            key={friend.id}
-                            className="flex items-center gap-2 px-3 py-2 bg-brand-100 rounded-lg"
-                          >
-                            <div className="w-6 h-6 rounded-full bg-brand-500 flex items-center justify-center text-white text-sm font-bold">
-                              {friend.nickname[0].toUpperCase()}
-                            </div>
-                            <span className="text-black font-medium">
-                              {friend.nickname}
-                            </span>
-                            <button
-                              onClick={() => handleRemoveFriend(friend.id)}
-                              className="ml-2 text-red-500 hover:text-red-700"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
+                  {/* 내 친구 목록 */}
                   {friends.length === 0 ? (
                     <div className="text-center py-12">
                       <p className="text-gray-500">
@@ -611,75 +619,151 @@ export default function Home() {
                     </div>
                   ) : (
                     <>
-                      <OverlapGrid 
-                        schedule1={mySchedule} 
-                        schedule2={friends[0].schedule}
-                        allSchedules={[mySchedule, ...friends.map(f => f.schedule)]}
-                        participantNames={[currentUser.nickname, ...friends.map(f => f.nickname)]}
-                      />
-                      
-                      {/* 추천 문구 표시 */}
-                      <div className="mt-6 p-4 bg-brand-50 border-l-4 border-brand-400 rounded">
-                        <h3 className="text-lg font-bold text-black mb-2">
-                          ⏰ 시간대 추천
-                        </h3>
-                        <p className="text-black">{recommendation}</p>
-                      </div>
-                      
-                      {/* 지하철역 추천 표시 */}
-                      {subwayRecommendations.length > 0 && (
-                        <div className="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded">
-                          <h3 className="text-lg font-bold text-black mb-3">
-                            🚇 중간 지점 지하철역 추천
+                      <div className="mb-6">
+                        <div className="flex items-center justify-between mb-3">
+                          <h3 className="text-lg font-bold text-black">
+                            내 친구 목록 ({friends.length}명)
                           </h3>
-                          <div className="space-y-2">
-                            {subwayRecommendations.map((station, idx) => (
+                          {selectedFriendIds.length > 0 && (
+                            <span className="text-sm text-brand-600 font-medium">
+                              {selectedFriendIds.length}명 비교 선택됨
+                            </span>
+                          )}
+                        </div>
+                        <div className="space-y-2">
+                          {friends.map((friend) => {
+                            const isSelected = selectedFriendIds.includes(friend.id);
+                            return (
                               <div
-                                key={idx}
-                                className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md transition flex-wrap"
+                                key={friend.id}
+                                className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
+                                  isSelected
+                                    ? 'bg-brand-50 border-brand-300'
+                                    : 'bg-white border-gray-200'
+                                }`}
                               >
                                 <div className="flex items-center gap-3">
-                                  <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
-                                    {idx + 1}
+                                  <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                                    {friend.nickname[0].toUpperCase()}
                                   </div>
                                   <div>
-                                    <p className="font-bold text-black">
-                                      {station.name}
-                                    </p>
-                                    <p className="text-sm text-gray-600">
-                                      {station.line}
-                                    </p>
+                                    <p className="font-medium text-black">{friend.nickname}</p>
+                                    {friend.location && (
+                                      <p className="text-xs text-gray-400">📍 {friend.location}</p>
+                                    )}
                                   </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-sm text-gray-600">
-                                    평균 거리
-                                  </p>
-                                  <p className="font-semibold text-green-600">
-                                    {station.avgDistance.toFixed(1)}km
-                                  </p>
+                                <div className="flex items-center gap-2">
+                                  <button
+                                    onClick={() =>
+                                      setSelectedFriendIds(prev =>
+                                        isSelected
+                                          ? prev.filter(id => id !== friend.id)
+                                          : [...prev, friend.id]
+                                      )
+                                    }
+                                    className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 ${
+                                      isSelected
+                                        ? 'bg-brand-500 text-white border-brand-600'
+                                        : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400 hover:text-brand-600'
+                                    }`}
+                                  >
+                                    {isSelected ? '✓ 비교중' : '비교 선택'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleRemoveFriend(friend.id)}
+                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                                    title="친구 삭제"
+                                  >
+                                    ✕
+                                  </button>
                                 </div>
                               </div>
-                            ))}
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* 비교 영역 */}
+                      {selectedFriends.length === 0 ? (
+                        <div className="p-4 bg-gray-50 rounded-lg text-center">
+                          <p className="text-gray-500 text-sm">
+                            👆 비교할 친구를 선택하세요
+                          </p>
+                        </div>
+                      ) : (
+                        <>
+                          <OverlapGrid
+                            schedule1={mySchedule}
+                            schedule2={selectedFriends[0].schedule}
+                            allSchedules={[mySchedule, ...selectedFriends.map(f => f.schedule)]}
+                            participantNames={[currentUser.nickname, ...selectedFriends.map(f => f.nickname)]}
+                          />
+
+                          {/* 추천 문구 표시 */}
+                          <div className="mt-6 p-4 bg-brand-50 border-l-4 border-brand-400 rounded">
+                            <h3 className="text-lg font-bold text-black mb-2">
+                              ⏰ 시간대 추천
+                            </h3>
+                            <p className="text-black">{recommendation}</p>
                           </div>
-                          <p className="text-xs text-gray-500 mt-3">
-                            💡 모든 멤버의 거주지를 고려한 중간 지점입니다
-                          </p>
-                        </div>
-                      )}
-                      
-                      {/* 거주지 정보가 부족할 때 */}
-                      {friends.length > 0 && subwayRecommendations.length === 0 && (
-                        <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
-                          <h3 className="text-lg font-bold text-black mb-2">
-                            📍 거주지 정보가 필요해요
-                          </h3>
-                          <p className="text-sm text-gray-700">
-                            {!currentUser?.location && '회원님의 거주지 정보가 없습니다. '}
-                            {friends.some(f => !f.location) && '일부 친구의 거주지 정보가 없습니다. '}
-                            모두 거주지를 입력하면 중간 지점 지하철역을 추천해드릴 수 있어요!
-                          </p>
-                        </div>
+
+                          {/* 지하철역 추천 표시 */}
+                          {subwayRecommendations.length > 0 && (
+                            <div className="mt-6 p-4 bg-green-50 border-l-4 border-green-500 rounded">
+                              <h3 className="text-lg font-bold text-black mb-3">
+                                🚇 중간 지점 지하철역 추천
+                              </h3>
+                              <div className="space-y-2">
+                                {subwayRecommendations.map((station, idx) => (
+                                  <div
+                                    key={idx}
+                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md transition flex-wrap"
+                                  >
+                                    <div className="flex items-center gap-3">
+                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
+                                        {idx + 1}
+                                      </div>
+                                      <div>
+                                        <p className="font-bold text-black">
+                                          {station.name}
+                                        </p>
+                                        <p className="text-sm text-gray-600">
+                                          {station.line}
+                                        </p>
+                                      </div>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-sm text-gray-600">
+                                        평균 거리
+                                      </p>
+                                      <p className="font-semibold text-green-600">
+                                        {station.avgDistance.toFixed(1)}km
+                                      </p>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-3">
+                                💡 모든 멤버의 거주지를 고려한 중간 지점입니다
+                              </p>
+                            </div>
+                          )}
+
+                          {/* 거주지 정보가 부족할 때 */}
+                          {subwayRecommendations.length === 0 && (
+                            <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
+                              <h3 className="text-lg font-bold text-black mb-2">
+                                📍 거주지 정보가 필요해요
+                              </h3>
+                              <p className="text-sm text-gray-700">
+                                {!currentUser?.location && '회원님의 거주지 정보가 없습니다. '}
+                                {selectedFriends.some(f => !f.location) && '일부 친구의 거주지 정보가 없습니다. '}
+                                모두 거주지를 입력하면 중간 지점 지하철역을 추천해드릴 수 있어요!
+                              </p>
+                            </div>
+                          )}
+                        </>
                       )}
                     </>
                   )}
