@@ -185,6 +185,8 @@ export interface GroupInvitation {
   creatorId: number;
   members: string[];
   createdAt: string;
+  /** 초대한 사람이 수신자의 친구가 아닐 때 true */
+  fromNonFriend?: boolean;
 }
 
 /**
@@ -272,4 +274,143 @@ export function removeGroupInvitation(userId: number, groupId: string): void {
   } catch (error) {
     console.error('그룹 초대 삭제 실패:', error);
   }
+}
+
+/**
+ * 확정된 약속 인터페이스
+ */
+export interface Appointment {
+  id: string;
+  name: string;
+  day: number;
+  startHour: number;
+  endHour: number;
+  participants: string[];
+  acceptedBy?: string[]; // 수락한 참여자 목록
+  createdAt: string;
+  status?: 'pending' | 'confirmed'; // 전원 수락 시 confirmed
+}
+
+/**
+ * 알림 인터페이스
+ */
+export interface AppNotification {
+  id: string;
+  type: 'appointment_cancelled' | 'appointment_invite' | 'appointment_accepted' | 'appointment_rejected' | 'friend_request' | 'friend_accepted' | 'friend_rejected';
+  message: string;
+  appointment?: Appointment;
+  /** 친구 요청 발신자 닉네임 */
+  fromNickname?: string;
+  createdAt: string;
+  read: boolean;
+}
+
+/**
+ * 특정 사용자에게 알림 저장
+ */
+export function saveNotification(userNickname: string, notification: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): void {
+  try {
+    const userId = nicknameToId(userNickname);
+    const key = `notifications_${userId}`;
+    if (typeof window !== 'undefined') {
+      const existing: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
+      existing.unshift({
+        ...notification,
+        id: Date.now().toString(),
+        read: false,
+        createdAt: new Date().toISOString(),
+      });
+      localStorage.setItem(key, JSON.stringify(existing));
+    }
+  } catch (error) {
+    console.error('알림 저장 실패:', error);
+  }
+}
+
+/**
+ * 사용자 알림 목록 불러오기
+ */
+export function loadNotifications(userId: number): AppNotification[] {
+  try {
+    if (typeof window !== 'undefined') {
+      const data = localStorage.getItem(`notifications_${userId}`);
+      return data ? (JSON.parse(data) as AppNotification[]) : [];
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * 알림 읽음 처리
+ */
+export function markNotificationsRead(userId: number): void {
+  try {
+    if (typeof window !== 'undefined') {
+      const key = `notifications_${userId}`;
+      const data: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const updated = data.map(n => ({ ...n, read: true }));
+      localStorage.setItem(key, JSON.stringify(updated));
+    }
+  } catch { /* noop */ }
+}
+
+/**
+ * 알림 단건 삭제
+ */
+export function removeNotification(userId: number, notificationId: string): void {
+  try {
+    if (typeof window !== 'undefined') {
+      const key = `notifications_${userId}`;
+      const data: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(data.filter(n => n.id !== notificationId)));
+    }
+  } catch { /* noop */ }
+}
+
+/**
+ * 특정 사용자의 로컈스토리지에 약속 저장 (수락 시)
+ */
+export function saveAppointmentForUser(userNickname: string, appointment: Appointment): void {
+  try {
+    const userId = nicknameToId(userNickname);
+    const key = `appointments_${userId}`;
+    if (typeof window !== 'undefined') {
+      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
+      if (!existing.some(a => a.id === appointment.id)) {
+        existing.push(appointment);
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+    }
+  } catch { /* noop */ }
+}
+
+/**
+ * 특정 사용자의 로컈스토리지에서 약속 삭제 (취소 시)
+ */
+export function removeAppointmentForUser(userNickname: string, apptId: string): void {
+  try {
+    const userId = nicknameToId(userNickname);
+    const key = `appointments_${userId}`;
+    if (typeof window !== 'undefined') {
+      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify(existing.filter(a => a.id !== apptId)));
+    }
+  } catch { /* noop */ }
+}
+
+/**
+ * 특정 사용자의 로컈스토리지에서 약속 업데이트 (수락 년이 변경될 때)
+ */
+export function updateAppointmentForUser(userNickname: string, appointment: Appointment): void {
+  try {
+    const userId = nicknameToId(userNickname);
+    const key = `appointments_${userId}`;
+    if (typeof window !== 'undefined') {
+      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
+      const updated = existing.map(a => a.id === appointment.id ? appointment : a);
+      localStorage.setItem(key, JSON.stringify(updated));
+    }
+  } catch { /* noop */ }
 }

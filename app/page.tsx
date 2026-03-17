@@ -17,7 +17,17 @@ import {
   GroupInvitation,
   loadPendingInvitations,
   removeGroupInvitation,
-  saveGroupInvitation
+  saveGroupInvitation,
+  AppNotification,
+  Appointment,
+  loadNotifications,
+  markNotificationsRead,
+  removeNotification,
+  saveNotification,
+  saveAppointmentForUser,
+  removeAppointmentForUser,
+  updateAppointmentForUser,
+  nicknameToId,
 } from './utils/storage';
 
 /**
@@ -78,7 +88,17 @@ export default function Home() {
   
   // 비교할 친구 선택 (ID 목록)
   const [selectedFriendIds, setSelectedFriendIds] = useState<number[]>([]);
-  
+  // 친구 시간표 단독 보기 (ID, null 이면 전체 비교)
+  const [viewFriendId, setViewFriendId] = useState<number | null>(null);
+
+  // 확정된 약속 목록
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  // 새 약속 입력 폼
+  const [newApptName, setNewApptName] = useState('');
+  const [newApptDay, setNewApptDay] = useState(0);
+  const [newApptStart, setNewApptStart] = useState(14);
+  const [newApptEnd, setNewApptEnd] = useState(16);
+
   // 그룹 목록
   const [groups, setGroups] = useState<Group[]>([]);
   
@@ -94,8 +114,28 @@ export default function Home() {
   const [pendingInvitations, setPendingInvitations] = useState<GroupInvitation[]>([]);
   const [currentInvitation, setCurrentInvitation] = useState<GroupInvitation | null>(null);
   
+  // 약속 취소 확인 모달
+  const [cancelAppt, setCancelAppt] = useState<Appointment | null>(null);
+  // 약속 수정 모드 (모달 내 인라인)
+  const [editAppt, setEditAppt] = useState<{ name: string; day: number; startHour: number; endHour: number; participants: string[] } | null>(null);
+  // 수정 모달 내 새 참여자 입력
+  const [newParticipantInput, setNewParticipantInput] = useState('');
+
+  // 알림
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+
   // 그룹 삭제 확인 모달
   const [deleteConfirmGroup, setDeleteConfirmGroup] = useState<Group | null>(null);
+  // 친구 삭제 확인
+  const [deleteConfirmFriend, setDeleteConfirmFriend] = useState<Friend | null>(null);
+
+  // 그룹 약속 확정 폼 (어떤 그룹에 약속을 잡고 있는지)
+  const [groupApptTarget, setGroupApptTarget] = useState<Group | null>(null);
+  const [groupApptName, setGroupApptName] = useState('');
+  const [groupApptDay, setGroupApptDay] = useState(0);
+  const [groupApptStart, setGroupApptStart] = useState(14);
+  const [groupApptEnd, setGroupApptEnd] = useState(16);
   
   // 현재 활성화된 탭
   const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
@@ -168,6 +208,16 @@ export default function Home() {
       setGroups(JSON.parse(savedGroups));
     }
 
+    // 저장된 약속 불러오기
+    const savedAppointments = localStorage.getItem(`appointments_${user.id}`);
+    if (savedAppointments) {
+      setAppointments(JSON.parse(savedAppointments));
+    }
+
+    // 알림 불러오기
+    const notifs = loadNotifications(user.id);
+    setNotifications(notifs);
+
     // 대기 중인 그룹 초대 확인
     const invitations = loadPendingInvitations(user.id);
     if (invitations.length > 0) {
@@ -186,7 +236,10 @@ export default function Home() {
     setFriends([]);
     setSelectedFriendIds([]);
     setGroups([]);
-    setPendingInvitations([]);
+    setAppointments([]);
+    setNotifications([]);
+    setShowNotifications(false);
+    setPendingInvitations([]);;
     setCurrentInvitation(null);
     setIsLoadingSchedule(false);
     setActiveTab('my');
@@ -211,6 +264,28 @@ export default function Home() {
     const updatedGroups = [...groups, newGroup];
     setGroups(updatedGroups);
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+
+    // 기존 멤버들(creator + 멤버)의 localStorage에 현재 유저를 멤버로 추가
+    const existingParticipants = [
+      { nickname: invitation.creatorNickname, id: invitation.creatorId },
+      ...invitation.members
+        .filter(m => m !== currentUser.nickname)
+        .map(m => ({ nickname: m, id: nicknameToId(m) })),
+    ];
+    existingParticipants.forEach(({ id }) => {
+      try {
+        const raw = localStorage.getItem(`groups_${id}`);
+        if (raw) {
+          const memberGroups: Group[] = JSON.parse(raw);
+          const updated = memberGroups.map(g =>
+            g.id === invitation.groupId && !g.members.includes(currentUser.nickname)
+              ? { ...g, members: [...g.members, currentUser.nickname] }
+              : g
+          );
+          localStorage.setItem(`groups_${id}`, JSON.stringify(updated));
+        }
+      } catch { /* 다른 사용자 데이터 접근 시 무시 */ }
+    });
 
     // 초대 삭제
     removeGroupInvitation(currentUser.id, invitation.groupId);
@@ -269,46 +344,129 @@ export default function Home() {
       return;
     }
 
-    // 닉네임을 해시하여 고유 ID 생성
-    const id = friendNickname.split('').reduce((acc, char) => {
+    const friendId = Math.abs(friendNickname.trim().split('').reduce((acc: number, char: string) => {
       return ((acc << 5) - acc) + char.charCodeAt(0);
-    }, 0);
+    }, 0));
 
-    const friendId = Math.abs(id);
-
-    // 이미 추가된 친구인지 확인
     if (friends.some(f => f.id === friendId)) {
-      alert('이미 추가된 친구입니다.');
+      alert('이미 친구입니다.');
       return;
     }
 
-    // 친구의 시간표 + 거주지 서버에서 동시 로드
-    const [friendSchedule, friendUserData] = await Promise.all([
-      loadSchedule(friendId).then(s => s || createEmptySchedule()),
-      loadUser(friendId),
-    ]);
-
-    // DB에 등록되지 않은 사용자 차단
+    // 상대방이 업스토어에 존재하는지 확인
+    const friendUserData = await loadUser(friendId);
     if (!friendUserData) {
       alert('존재하지 않는 사용자입니다. 닉네임을 확인해주세요.');
       return;
     }
 
-    const friendLocation = friendUserData?.location as string | undefined;
-
-    const newFriend = {
-      id: friendId,
-      nickname: friendNickname.trim(),
-      schedule: friendSchedule,
-      location: friendLocation,
-    };
-    const updatedFriends = [...friends, newFriend];
-    setFriends(updatedFriends);
-    if (currentUser) {
-      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+    // 이미 요청을 보냈는지 확인 (이중 발송 방지)
+    const sentKey = `friend_requests_sent_${currentUser!.id}`;
+    const sentList: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
+    if (sentList.includes(friendNickname.trim())) {
+      alert('이미 친구 요청을 보냈습니다. 수락 대기 중입니다.');
+      return;
     }
 
+    // 상대방에게 친구 요청 알림 전송
+    saveNotification(friendNickname.trim(), {
+      type: 'friend_request',
+      message: `👤 ${currentUser!.nickname}님이 친구 요청을 보냈습니다.`,
+      fromNickname: currentUser!.nickname,
+    });
+
+    // 발송 목록에 기록
+    sentList.push(friendNickname.trim());
+    localStorage.setItem(sentKey, JSON.stringify(sentList));
+
+    alert(`${friendNickname.trim()}님에게 친구 요청을 보냈습니다!`);
     setFriendNickname('');
+  };
+
+  /**
+   * 친구 요청 수락
+   */
+  const handleAcceptFriendRequest = async (n: AppNotification) => {
+    if (!currentUser || !n.fromNickname) return;
+    const fromNickname = n.fromNickname;
+    const fromId = Math.abs(fromNickname.split('').reduce((acc: number, char: string) => {
+      return ((acc << 5) - acc) + char.charCodeAt(0);
+    }, 0));
+
+    // 이미 친구인지 확인
+    if (friends.some(f => f.id === fromId)) {
+      removeNotification(currentUser.id, n.id);
+      setNotifications(prev => prev.filter(x => x.id !== n.id));
+      return;
+    }
+
+    // 요청자의 스케줄 로드
+    const [fromSchedule, fromUserData] = await Promise.all([
+      loadSchedule(fromId).then(s => s || createEmptySchedule()),
+      loadUser(fromId),
+    ]);
+
+    const newFriend = {
+      id: fromId,
+      nickname: fromNickname,
+      schedule: fromSchedule,
+      location: fromUserData?.location as string | undefined,
+    };
+
+    // 내 친구 목록에 추가
+    const updatedFriends = [...friends, newFriend];
+    setFriends(updatedFriends);
+    localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+
+    // 요청자의 친구 목록에도 나를 추가
+    try {
+      const theirKey = `friends_${fromId}`;
+      const theirList: string[] = JSON.parse(localStorage.getItem(theirKey) || '[]');
+      if (!theirList.includes(currentUser.nickname)) {
+        theirList.push(currentUser.nickname);
+        localStorage.setItem(theirKey, JSON.stringify(theirList));
+      }
+      // 요청자의 발송 기록 제거
+      const sentKey = `friend_requests_sent_${fromId}`;
+      const sentList: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
+      localStorage.setItem(sentKey, JSON.stringify(sentList.filter((s: string) => s !== currentUser.nickname)));
+    } catch { /* 무시 */ }
+
+    // 수락 알림 상대방에게 전송
+    saveNotification(fromNickname, {
+      type: 'friend_accepted',
+      message: `✅ ${currentUser.nickname}님이 친구 요청을 수락했습니다!`,
+    });
+
+    removeNotification(currentUser.id, n.id);
+    setNotifications(prev => prev.filter(x => x.id !== n.id));
+  };
+
+  /**
+   * 친구 요청 거절
+   */
+  const handleRejectFriendRequest = (n: AppNotification) => {
+    if (!currentUser || !n.fromNickname) return;
+    const fromNickname = n.fromNickname;
+
+    // 요청자의 발송 기록 제거
+    try {
+      const fromId = Math.abs(fromNickname.split('').reduce((acc: number, char: string) => {
+        return ((acc << 5) - acc) + char.charCodeAt(0);
+      }, 0));
+      const sentKey = `friend_requests_sent_${fromId}`;
+      const sentList: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
+      localStorage.setItem(sentKey, JSON.stringify(sentList.filter((s: string) => s !== currentUser.nickname)));
+    } catch { /* 무시 */ }
+
+    // 거절 알림 상대방에게 전송
+    saveNotification(fromNickname, {
+      type: 'friend_rejected',
+      message: `❌ ${currentUser.nickname}님이 친구 요청을 거절했습니다.`,
+    });
+
+    removeNotification(currentUser.id, n.id);
+    setNotifications(prev => prev.filter(x => x.id !== n.id));
   };
 
   /**
@@ -415,6 +573,215 @@ export default function Home() {
   };
 
   /**
+   * 약속 취소 (+ 참여자에게 알림)
+   */
+  const handleCancelAppointment = (appt: Appointment) => {
+    if (!currentUser) return;
+    const updated = appointments.filter(a => a.id !== appt.id);
+    setAppointments(updated);
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+
+    // 자신을 제외한 다른 참여자에게 알림 + localStorage에서도 삭제
+    const dayName = ['월','화','수','목','금','토','일'][appt.day];
+    const others = appt.participants.filter(p => p !== currentUser.nickname);
+    others.forEach(nickname => {
+      removeAppointmentForUser(nickname, appt.id);
+      saveNotification(nickname, {
+        type: 'appointment_cancelled',
+        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속을 취소했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+      });
+    });
+
+    setCancelAppt(null);
+    setEditAppt(null);
+  };
+
+  /**
+   * 약속 수정 (시간/이름/요일 변경 + 참여자에게 알림)
+   */
+  const handleEditAppointment = () => {
+    if (!currentUser || !cancelAppt || !editAppt) return;
+    if (editAppt.startHour >= editAppt.endHour) {
+      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+    const newParticipants = editAppt.participants;
+    const addedParticipants = newParticipants.filter(p => !cancelAppt.participants.includes(p));
+    const updated: Appointment = { ...cancelAppt, ...editAppt, participants: newParticipants, acceptedBy: cancelAppt.acceptedBy ?? [currentUser.nickname] };
+    const newList = appointments.map(a => a.id === cancelAppt.id ? updated : a);
+    setAppointments(newList);
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(newList));
+    const dayName = ['월','화','수','목','금','토','일'][updated.day];
+    // 기존 참여자: 수정 알림
+    cancelAppt.participants.filter(p => p !== currentUser.nickname).forEach(nickname => {
+      removeAppointmentForUser(nickname, updated.id);
+      saveAppointmentForUser(nickname, updated);
+      saveNotification(nickname, {
+        type: 'appointment_accepted',
+        message: `✏️ ${currentUser.nickname}님이 [${updated.name}] 약속을 수정했습니다. (${dayName}요일 ${String(updated.startHour).padStart(2,'0')}:00~${String(updated.endHour).padStart(2,'0')}:00)`,
+      });
+    });
+    // 새 참여자: 초대 알림 (상대방 pending 상태로 저장)
+    addedParticipants.forEach(nickname => {
+      saveAppointmentForUser(nickname, { ...updated, status: 'pending' });
+      saveNotification(nickname, {
+        type: 'appointment_invite',
+        message: `📩 ${currentUser.nickname}님이 [${updated.name}] 약속에 초대했습니다. (${dayName}요일 ${String(updated.startHour).padStart(2,'0')}:00~${String(updated.endHour).padStart(2,'0')}:00)`,
+        appointment: { ...updated, status: 'pending' },
+      });
+    });
+    setCancelAppt(null);
+    setEditAppt(null);
+    setNewParticipantInput('');
+  };
+
+  /**
+   * 약속 확정 (나에게 저장 + 다른 참여자에게 초대 알림 발송)
+   */
+  const handleAddAppointment = () => {
+    if (!currentUser) return;
+    if (newApptStart >= newApptEnd) {
+      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+    const appt: Appointment = {
+      id: Date.now().toString(),
+      name: newApptName.trim() || '약속',
+      day: newApptDay,
+      startHour: newApptStart,
+      endHour: newApptEnd,
+      participants: [currentUser.nickname, ...selectedFriends.map(f => f.nickname)],
+      acceptedBy: [currentUser.nickname],
+      createdAt: new Date().toISOString(),
+      status: selectedFriends.length > 0 ? 'pending' : 'confirmed',
+    };
+
+    // 나에게만 확정 저장
+    const updated = [...appointments, appt];
+    setAppointments(updated);
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+
+    // 다른 참여자에게 초대 알림 발송 (수락 전까지 저장 안 함)
+    const dayName = ['월','화','수','목','금','토','일'][appt.day];
+    selectedFriends.forEach(friend => {
+      saveNotification(friend.nickname, {
+        type: 'appointment_invite',
+        message: `📩 ${currentUser.nickname}님이 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        appointment: appt,
+      });
+    });
+
+    setNewApptName('');
+  };
+
+  /**
+   * 약속 초대 수락
+   */
+  const handleAcceptInvite = (n: AppNotification) => {
+    if (!currentUser || !n.appointment) return;
+    const appt = n.appointment;
+    // 나를 acceptedBy에 추가
+    const updatedAcceptedBy = [...new Set([...(appt.acceptedBy ?? [appt.participants[0]]), currentUser.nickname])];
+    const allAccepted = appt.participants.every(p => updatedAcceptedBy.includes(p));
+    const updatedAppt: Appointment = {
+      ...appt,
+      acceptedBy: updatedAcceptedBy,
+      status: allAccepted ? 'confirmed' : 'pending',
+    };
+
+    // 내 localStorage에 저장
+    const existing: Appointment[] = JSON.parse(localStorage.getItem(`appointments_${currentUser.id}`) || '[]');
+    const newList = existing.some(a => a.id === updatedAppt.id)
+      ? existing.map(a => a.id === updatedAppt.id ? updatedAppt : a)
+      : [...existing, updatedAppt];
+    setAppointments(prev => prev.some(a => a.id === updatedAppt.id)
+      ? prev.map(a => a.id === updatedAppt.id ? updatedAppt : a)
+      : [...prev, updatedAppt]
+    );
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(newList));
+
+    // 작성자의 localStorage도 acceptedBy 업데이트
+    const creator = appt.participants[0];
+    if (creator !== currentUser.nickname) {
+      updateAppointmentForUser(creator, updatedAppt);
+      const dayName = ['월','화','수','목','금','토','일'][appt.day];
+      saveNotification(creator, {
+        type: 'appointment_accepted',
+        message: allAccepted
+          ? `🎉 [${appt.name}] 약속에 모든 참여자가 수락했습니다! (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`
+          : `✅ ${currentUser.nickname}님이 [${appt.name}] 약속을 수락했습니다. (${updatedAcceptedBy.length}/${appt.participants.length}명 수락)`,
+      });
+    }
+
+    removeNotification(currentUser.id, n.id);
+    setNotifications(prev => prev.filter(x => x.id !== n.id));
+  };
+
+  /**
+   * 약속 초대 거절
+   */
+  const handleRejectInvite = (n: AppNotification) => {
+    if (!currentUser || !n.appointment) return;
+    const appt = n.appointment;
+    removeNotification(currentUser.id, n.id);
+    setNotifications(prev => prev.filter(x => x.id !== n.id));
+    // 작성자에게 거절 알림
+    const creator = appt.participants[0];
+    if (creator !== currentUser.nickname) {
+      const dayName = ['월','화','수','목','금','토','일'][appt.day];
+      saveNotification(creator, {
+        type: 'appointment_rejected',
+        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 거절했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+      });
+    }
+  };
+
+  /**
+   * 약속 삭제
+   */
+  const handleDeleteAppointment = (id: string) => {
+    if (!currentUser) return;
+    const updated = appointments.filter(a => a.id !== id);
+    setAppointments(updated);
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+  };
+
+  /**
+   * 그룹 약속 확정 (그룹 멤버 전체에게 초대 발송)
+   */
+  const handleAddGroupAppointment = () => {
+    if (!currentUser || !groupApptTarget) return;
+    if (groupApptStart >= groupApptEnd) {
+      alert('종료 시간은 시작 시간보다 늦어야 합니다.');
+      return;
+    }
+    const appt: Appointment = {
+      id: Date.now().toString(),
+      name: groupApptName.trim() || '약속',
+      day: groupApptDay,
+      startHour: groupApptStart,
+      endHour: groupApptEnd,
+      participants: [currentUser.nickname, ...groupApptTarget.members.filter(m => m !== currentUser.nickname)],
+      acceptedBy: [currentUser.nickname],
+      createdAt: new Date().toISOString(),
+      status: 'pending',
+    };
+    const updated = [...appointments, appt];
+    setAppointments(updated);
+    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+    const dayName = ['월','화','수','목','금','토','일'][appt.day];
+    groupApptTarget.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
+      saveNotification(memberNickname, {
+        type: 'appointment_invite',
+        message: `📬 ${currentUser.nickname}님이 [${groupApptTarget.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        appointment: appt,
+      });
+    });
+    setGroupApptName('');
+    setGroupApptTarget(null);
+  };
+
+  /**
    * 그룹 삭제
    */
   const handleDeleteGroup = (groupId: string) => {
@@ -422,6 +789,99 @@ export default function Home() {
     const updatedGroups = groups.filter(g => g.id !== groupId);
     setGroups(updatedGroups);
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+  };
+
+  /**
+   * 그룹에 새 멤버 초대 (그룹 모달 내에서 호출)
+   */
+  const handleInviteToGroup = (targetNickname: string, isFriend: boolean) => {
+    if (!currentUser || !selectedGroup) return;
+    if (targetNickname === currentUser.nickname) {
+      alert('자기 자신은 초대할 수 없습니다.');
+      return;
+    }
+    const alreadyIn = [selectedGroup.creator, ...selectedGroup.members];
+    if (alreadyIn.includes(targetNickname)) {
+      alert('이미 그룹에 참여 중인 멤버입니다.');
+      return;
+    }
+
+    // 초대만 저장 — 수락 전에는 멤버로 추가하지 않음
+    const invitation: GroupInvitation = {
+      groupId: selectedGroup.id,
+      groupName: selectedGroup.name,
+      creatorNickname: selectedGroup.creator,
+      creatorId: selectedGroup.creatorId,
+      members: [...selectedGroup.members, targetNickname],
+      createdAt: selectedGroup.createdAt,
+      fromNonFriend: !isFriend,
+    };
+    saveGroupInvitation(targetNickname, invitation);
+
+    alert(`${targetNickname}님에게 초대를 전송했습니다!`);
+  };
+
+  /**
+   * 그룹명 변경 (모달 내 인라인 편집)
+   */
+  const handleRenameGroup = (groupId: string, newName: string) => {
+    if (!currentUser || !selectedGroup) return;
+    const updatedGroup: Group = { ...selectedGroup, name: newName };
+    const updatedGroups = groups.map(g => g.id === groupId ? updatedGroup : g);
+    setGroups(updatedGroups);
+    setSelectedGroup(updatedGroup);
+    localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(updatedGroups));
+    // 다른 멤버들의 localStorage도 동기화
+    const allGroupMembers = [selectedGroup.creator, ...selectedGroup.members];
+    allGroupMembers.filter(m => m !== currentUser.nickname).forEach(nickname => {
+      const memberId = nicknameToId(nickname);
+      try {
+        const raw = localStorage.getItem(`groups_${memberId}`);
+        if (raw) {
+          const memberGroups: Group[] = JSON.parse(raw);
+          const updated = memberGroups.map(g => g.id === groupId ? { ...g, name: newName } : g);
+          localStorage.setItem(`groups_${memberId}`, JSON.stringify(updated));
+        }
+      } catch { /* 다른 사용자 데이터 접근 실패 시 무시 */ }
+    });
+  };
+
+  /**
+   * 그룹 나가기 (일반 멤버) 또는 그룹 삭제 (생성자)
+   */
+  const handleLeaveGroup = (group: Group) => {
+    if (!currentUser) return;
+    // 내 목록에서 제거
+    handleDeleteGroup(group.id);
+    const others = group.members.filter(m => m !== currentUser.nickname);
+    if (others.length === 0) {
+      // 마지막 멤버: 그룹 자동 소멸 (추가 작업 없음)
+      setDeleteConfirmGroup(null);
+      return;
+    }
+    // 남은 멤버들의 localStorage에서 해당 그룹의 members 배열 업데이트
+    others.forEach(nickname => {
+      const memberId = nicknameToId(nickname);
+      const key = `groups_${memberId}`;
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const memberGroups: Group[] = JSON.parse(raw);
+          const updated = memberGroups.map(g =>
+            g.id === group.id
+              ? { ...g, members: g.members.filter(m => m !== currentUser.nickname) }
+              : g
+          );
+          localStorage.setItem(key, JSON.stringify(updated));
+        }
+      } catch { /* 다른 사용자 데이터 접근 실패 시 무시 */ }
+      // 남은 멤버들에게 알림 발송
+      saveNotification(nickname, {
+        type: 'appointment_cancelled',
+        message: `🚪 ${currentUser.nickname}님이 [${group.name}] 그룹에서 나갔습니다.`,
+      });
+    });
+    setDeleteConfirmGroup(null);
   };
 
   /**
@@ -498,7 +958,7 @@ export default function Home() {
                 언제 만나
               </h1>
             </div>
-            <div className="flex justify-center sm:justify-end">
+            <div className="flex justify-center sm:justify-end items-center gap-2">
               <SimpleLogin
                 currentUser={currentUser}
                 onLogin={handleLogin}
@@ -710,6 +1170,11 @@ export default function Home() {
                     schedule={mySchedule}
                     onChange={setMySchedule}
                     title="내 시간표"
+                    appointments={appointments}
+                    onAppointmentClick={(id) => {
+                      const appt = appointments.find(a => a.id === id);
+                      if (appt) setCancelAppt(appt);
+                    }}
                   />
                   {/* 거주지 설정 */}
                   <div className="mt-6 p-4 bg-brand-50 border border-brand-200 rounded-lg">
@@ -759,7 +1224,7 @@ export default function Home() {
                           </h3>
                           {selectedFriendIds.length > 0 && (
                             <span className="text-sm text-brand-600 font-medium">
-                              {selectedFriendIds.length}명 비교 선택됨
+                              {selectedFriendIds.length}명 비교 중
                             </span>
                           )}
                         </div>
@@ -769,10 +1234,13 @@ export default function Home() {
                             return (
                               <div
                                 key={friend.id}
-                                className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 ${
-                                  isSelected
+                                onClick={() => setViewFriendId(prev => prev === friend.id ? null : friend.id)}
+                                className={`flex items-center justify-between p-3 rounded-lg border transition-all duration-200 cursor-pointer ${
+                                  viewFriendId === friend.id
+                                    ? 'bg-purple-50 border-purple-300 ring-2 ring-purple-200'
+                                    : isSelected
                                     ? 'bg-brand-50 border-brand-300'
-                                    : 'bg-white border-gray-200'
+                                    : 'bg-white border-gray-200 hover:border-gray-300'
                                 }`}
                               >
                                 <div className="flex items-center gap-3">
@@ -784,17 +1252,21 @@ export default function Home() {
                                     {friend.location && (
                                       <p className="text-xs text-gray-400">{friend.location}</p>
                                     )}
+                                    {viewFriendId === friend.id && (
+                                      <p className="text-xs text-purple-500 font-semibold mt-0.5">📅 시간표 보는 중</p>
+                                    )}
                                   </div>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <button
-                                    onClick={() =>
+                                    onClick={(e) => {
+                                      e.stopPropagation();
                                       setSelectedFriendIds(prev =>
                                         isSelected
                                           ? prev.filter(id => id !== friend.id)
                                           : [...prev, friend.id]
-                                      )
-                                    }
+                                      );
+                                    }}
                                     className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 ${
                                       isSelected
                                         ? 'bg-brand-500 text-white border-brand-600'
@@ -804,7 +1276,7 @@ export default function Home() {
                                     {isSelected ? '✓ 비교중' : '비교 선택'}
                                   </button>
                                   <button
-                                    onClick={() => handleRemoveFriend(friend.id)}
+                                    onClick={(e) => { e.stopPropagation(); setDeleteConfirmFriend(friend); }}
                                     className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
                                     title="친구 삭제"
                                   >
@@ -818,7 +1290,34 @@ export default function Home() {
                       </div>
 
                       {/* 비교 영역 */}
-                      {selectedFriends.length === 0 ? (
+                      {viewFriendId !== null ? (
+                        // 단독 시간표 보기 (선택 여부와 무관하게 우선 처리)
+                        (() => {
+                          const viewFriend = friends.find(f => f.id === viewFriendId);
+                          if (!viewFriend) return null;
+                          return (
+                            <>
+                              <div className="mb-3 px-1 flex items-center gap-2">
+                                <p className="text-sm font-semibold text-gray-700">
+                                  📅 <span className="text-purple-600 font-bold">{viewFriend.nickname}</span>님의 시간표
+                                </p>
+                                <button
+                                  onClick={() => setViewFriendId(null)}
+                                  className="text-xs text-gray-400 hover:text-brand-500 underline cursor-pointer"
+                                >
+                                  전체 비교로 돌아가기
+                                </button>
+                              </div>
+                              <OverlapGrid
+                                schedule1={viewFriend.schedule}
+                                schedule2={createEmptySchedule()}
+                                allSchedules={[viewFriend.schedule]}
+                                participantNames={[viewFriend.nickname]}
+                              />
+                            </>
+                          );
+                        })()
+                      ) : selectedFriends.length === 0 ? (
                         <div className="p-4 bg-gray-50 rounded-lg text-center">
                           <p className="text-gray-500 text-sm">
                             👆 비교할 친구를 선택하세요
@@ -826,6 +1325,20 @@ export default function Home() {
                         </div>
                       ) : (
                         <>
+                          <div className="mb-3 px-1">
+                            <p className="text-sm font-semibold text-gray-700">
+                              📊 시간표 비교 ({1 + selectedFriends.length}명) :{' '}
+                              <span className="text-brand-600">{currentUser.nickname}(나)</span>
+                              {selectedFriends.map(f => (
+                                <span key={f.id}>,{' '}
+                                  <button
+                                    onClick={() => setViewFriendId(f.id)}
+                                    className="text-gray-800 hover:text-purple-600 hover:underline cursor-pointer font-semibold"
+                                  >{f.nickname}</button>
+                                </span>
+                              ))}
+                            </p>
+                          </div>
                           <OverlapGrid
                             schedule1={mySchedule}
                             schedule2={selectedFriends[0].schedule}
@@ -849,9 +1362,12 @@ export default function Home() {
                               </h3>
                               <div className="space-y-2">
                                 {subwayRecommendations.map((station, idx) => (
-                                  <div
+                                  <a
                                     key={idx}
-                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md transition flex-wrap"
+                                    href={`https://map.naver.com/p/search/${encodeURIComponent(station.name + ' 맛집')}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md hover:bg-green-50 transition flex-wrap cursor-pointer"
                                   >
                                     <div className="flex items-center gap-3">
                                       <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
@@ -867,14 +1383,14 @@ export default function Home() {
                                       </div>
                                     </div>
                                     <div className="text-right">
-                                      <p className="text-sm text-gray-600">
-                                        평균 거리
-                                      </p>
-                                      <p className="font-semibold text-green-600">
-                                        {station.avgDistance.toFixed(1)}km
-                                      </p>
-                                    </div>
-                                  </div>
+                                        <p className="text-sm text-gray-600">
+                                          평균 거리
+                                        </p>
+                                        <p className="font-semibold text-green-600">
+                                          {station.avgDistance.toFixed(1)}km
+                                        </p>
+                                      </div>
+                                  </a>
                                 ))}
                               </div>
                               <p className="text-xs text-gray-500 mt-3">
@@ -896,7 +1412,87 @@ export default function Home() {
                               </p>
                             </div>
                           )}
+
+                          {/* 약속 확정 폼 */}
+                          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <h3 className="text-base font-bold text-blue-700 mb-3">📅 약속 확정하기</h3>
+                            <div className="flex flex-col gap-2">
+                              <input
+                                type="text"
+                                value={newApptName}
+                                onChange={(e) => setNewApptName(e.target.value)}
+                                placeholder="약속 이름 (예: 점심 약속)"
+                                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                maxLength={30}
+                              />
+                              <div className="flex flex-wrap items-center gap-2 text-sm">
+                                <select
+                                  value={newApptDay}
+                                  onChange={(e) => setNewApptDay(Number(e.target.value))}
+                                  className="px-2 py-1.5 border border-blue-200 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                                >
+                                  {['월요일','화요일','수요일','목요일','금요일','토요일','일요일'].map((d, i) => (
+                                    <option key={i} value={i}>{d}</option>
+                                  ))}
+                                </select>
+                                <select
+                                  value={newApptStart}
+                                  onChange={(e) => setNewApptStart(Number(e.target.value))}
+                                  className="px-2 py-1.5 border border-blue-200 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                                >
+                                  {Array.from({length: 24}, (_, i) => (
+                                    <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>
+                                  ))}
+                                </select>
+                                <span className="text-blue-600 font-semibold">~</span>
+                                <select
+                                  value={newApptEnd}
+                                  onChange={(e) => setNewApptEnd(Number(e.target.value))}
+                                  className="px-2 py-1.5 border border-blue-200 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                                >
+                                  {Array.from({length: 24}, (_, i) => (
+                                    <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>
+                                  ))}
+                                </select>
+                              </div>
+                              <button
+                                onClick={handleAddAppointment}
+                                className="w-full py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition cursor-pointer text-sm"
+                              >
+                                약속 확정하기
+                              </button>
+                            </div>
+                          </div>
                         </>
+                      )}
+
+                      {/* 확정된 약속 목록 */}
+                      {appointments.length > 0 && (
+                        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                          <h3 className="text-base font-bold text-blue-700 mb-3">📋 확정된 약속</h3>
+                          <div className="space-y-2">
+                            {appointments.map((appt) => {
+                              const dayName = ['월','화','수','목','금','토','일'][appt.day];
+                              const isPending = appt.status === 'pending';
+                              return (
+                                <div
+                                  key={appt.id}
+                                  onClick={() => setCancelAppt(appt)}
+                                  className={`p-3 rounded-lg cursor-pointer transition hover:opacity-85 active:scale-[0.98] ${isPending ? 'bg-yellow-200 text-gray-800' : 'bg-blue-500 text-white'}`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <p className="font-bold">{appt.name}</p>
+                                    {isPending && <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-semibold">⏳ 수락 대기중</span>}
+                                  </div>
+                                  <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>
+                                    {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
+                                  </p>
+                                  <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-200'}`}>{appt.participants.join(', ')}</p>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
                       )}
                     </>
                   )}
@@ -969,7 +1565,7 @@ export default function Home() {
                               }}
                               className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition"
                             >
-                              삭제
+                              {'그룹 나가기'}
                             </button>
                           </div>
                           <div className="mb-2">
@@ -986,7 +1582,7 @@ export default function Home() {
                             </div>
                           </div>
                           <p className="text-xs text-gray-400 mt-3">
-                            생성일: {new Date(group.createdAt).toLocaleDateString('ko-KR')} | 클릭하여 스케줄 확인
+                            생성일: {new Date(group.createdAt).toLocaleDateString('ko-KR')} | 클릭하여 스케줄 확인 및 약속 관리
                           </p>
                         </div>
                       ))}
@@ -1004,14 +1600,285 @@ export default function Home() {
         </footer>
       </div>
 
+      {/* 우측 하단 고정 알림 버튼 */}
+      {currentUser && (
+        <div className="fixed bottom-6 right-4 sm:right-6 z-50">
+          {showNotifications && (
+            <div className="absolute bottom-14 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <p className="font-bold text-black text-sm">🔔 알림</p>
+                <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
+              </div>
+              {notifications.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">알림이 없어요.</p>
+              ) : (
+                <div className="max-h-72 overflow-y-auto">
+                  {notifications.map(n => (
+                    <div key={n.id} className={`px-4 py-3 border-b border-gray-50 ${n.read ? '' : 'bg-blue-50'}`}>
+                      {n.type === 'appointment_invite' && n.appointment ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-gray-700">{n.message}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptInvite(n)}
+                              className="flex-1 py-1 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition cursor-pointer"
+                            >✅ 수락</button>
+                            <button
+                              onClick={() => handleRejectInvite(n)}
+                              className="flex-1 py-1 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-red-100 hover:text-red-600 transition cursor-pointer"
+                            >❌ 거절</button>
+                          </div>
+                        </div>
+                      ) : n.type === 'friend_request' ? (
+                        <div className="flex flex-col gap-2">
+                          <p className="text-sm text-gray-700">{n.message}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => handleAcceptFriendRequest(n)}
+                              className="flex-1 py-1 bg-green-500 text-white text-xs font-semibold rounded-lg hover:bg-green-600 transition cursor-pointer"
+                            >👍 수락</button>
+                            <button
+                              onClick={() => handleRejectFriendRequest(n)}
+                              className="flex-1 py-1 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-red-100 hover:text-red-600 transition cursor-pointer"
+                            >👎 거절</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2">
+                          <p className="text-sm text-gray-700 flex-1">{n.message}</p>
+                          <button
+                            onClick={() => {
+                              if (!currentUser) return;
+                              removeNotification(currentUser.id, n.id);
+                              setNotifications(prev => prev.filter(x => x.id !== n.id));
+                            }}
+                            className="text-gray-300 hover:text-red-400 cursor-pointer flex-shrink-0 text-xs mt-0.5"
+                          >✕</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          <button
+            onClick={() => {
+              setShowNotifications(!showNotifications);
+              if (!showNotifications && currentUser) {
+                markNotificationsRead(currentUser.id);
+                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                // localStorage에서 약속 상태 재동기화 (다른 사용자 수락 시 confirmed 반영)
+                const saved = localStorage.getItem(`appointments_${currentUser.id}`);
+                if (saved) setAppointments(JSON.parse(saved));
+              }
+            }}
+            className="relative w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:text-brand-600 hover:shadow-xl transition cursor-pointer"
+            title="알림"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+            </svg>
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-[10px] font-bold rounded-full flex items-center justify-center">
+                {notifications.filter(n => !n.read).length}
+              </span>
+            )}
+          </button>
+        </div>
+      )}
+
+      {/* 약속 취소/수정 모달 */}
+      {cancelAppt && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[60] p-4" onClick={() => { setCancelAppt(null); setEditAppt(null); }}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full p-6" onClick={e => e.stopPropagation()}>
+            {editAppt ? (
+              /* 수정 모드 */
+              <>
+                <h2 className="text-lg font-bold text-black mb-4">✏️ 약속 수정</h2>
+                <div className="flex flex-col gap-3 mb-5">
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">약속 이름</label>
+                    <input
+                      type="text"
+                      value={editAppt.name}
+                      onChange={(e) => setEditAppt(prev => prev && ({ ...prev, name: e.target.value }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={30}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">요일</label>
+                    <select
+                      value={editAppt.day}
+                      onChange={(e) => setEditAppt(prev => prev && ({ ...prev, day: Number(e.target.value) }))}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                    >
+                      {['월요일','화요일','수요일','목요일','금요일','토요일','일요일'].map((d, i) => (
+                        <option key={i} value={i}>{d}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-semibold text-gray-500 mb-1 block">시작</label>
+                      <select
+                        value={editAppt.startHour}
+                        onChange={(e) => setEditAppt(prev => prev && ({ ...prev, startHour: Number(e.target.value) }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                      >
+                        {Array.from({length: 24}, (_, i) => (
+                          <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                    <span className="text-gray-400 mt-5">~</span>
+                    <div className="flex-1">
+                      <label className="text-xs font-semibold text-gray-500 mb-1 block">종료</label>
+                      <select
+                        value={editAppt.endHour}
+                        onChange={(e) => setEditAppt(prev => prev && ({ ...prev, endHour: Number(e.target.value) }))}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer"
+                      >
+                        {Array.from({length: 24}, (_, i) => (
+                          <option key={i} value={i}>{String(i).padStart(2,'0')}:00</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <p className="text-xs text-gray-400 mb-4">수정 시 참여자에게 알림이 전송됩니다.</p>
+
+                {/* 참여자 관리 */}
+                <div className="mb-4">
+                  <label className="text-xs font-semibold text-gray-500 mb-2 block">참여자</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {editAppt.participants.map((p, idx) => (
+                      <span key={idx} className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                        {p}
+                        {p !== currentUser?.nickname && (
+                          <button
+                            onClick={() => setEditAppt(prev => prev && ({ ...prev, participants: prev.participants.filter(x => x !== p) }))}
+                            className="text-blue-400 hover:text-red-500 cursor-pointer leading-none"
+                          >×</button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={newParticipantInput}
+                      onChange={(e) => setNewParticipantInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          const t = newParticipantInput.trim();
+                          if (!t) return;
+                          if (editAppt.participants.includes(t)) { alert('이미 추가된 참여자입니다.'); return; }
+                          setEditAppt(prev => prev && ({ ...prev, participants: [...prev.participants, t] }));
+                          setNewParticipantInput('');
+                        }
+                      }}
+                      placeholder="닉네임 입력 후 Enter"
+                      className="flex-1 px-3 py-1.5 border border-gray-300 rounded-lg text-black text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={20}
+                    />
+                    <button
+                      onClick={() => {
+                        const t = newParticipantInput.trim();
+                        if (!t) return;
+                        if (editAppt.participants.includes(t)) { alert('이미 추가된 참여자입니다.'); return; }
+                        setEditAppt(prev => prev && ({ ...prev, participants: [...prev.participants, t] }));
+                        setNewParticipantInput('');
+                      }}
+                      className="px-3 py-1.5 bg-blue-500 text-white text-xs font-semibold rounded-lg hover:bg-blue-600 transition cursor-pointer"
+                    >추가</button>
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setEditAppt(null)}
+                    className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer"
+                  >뒤로</button>
+                  <button
+                    onClick={handleEditAppointment}
+                    className="flex-1 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition text-sm cursor-pointer"
+                  >수정하기</button>
+                </div>
+              </>
+            ) : (
+              /* 기본 모드 */
+              <>
+                <h2 className="text-lg font-bold text-black mb-2">📅 약속 관리</h2>
+                <p className="text-sm text-gray-700 mb-1">
+                  <span className="font-semibold">{cancelAppt.participants.join(', ')}</span>와의 약속입니다.
+                </p>
+                <p className="text-sm text-gray-700 mb-1">
+                  <span className="font-semibold">{['월','화','수','목','금','토','일'][cancelAppt.day]}요일</span>{' '}
+                  {String(cancelAppt.startHour).padStart(2,'0')}:00 ~ {String(cancelAppt.endHour).padStart(2,'0')}:00
+                </p>
+                <p className="text-sm font-bold text-blue-600 mb-4">&ldquo;{cancelAppt.name}&rdquo;</p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setCancelAppt(null)}
+                    className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer"
+                  >유지하기</button>
+                  <button
+                    onClick={() => setEditAppt({ name: cancelAppt.name, day: cancelAppt.day, startHour: cancelAppt.startHour, endHour: cancelAppt.endHour, participants: [...cancelAppt.participants] })}
+                    className="flex-1 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition text-sm cursor-pointer"
+                  >수정하기</button>
+                  <button
+                    onClick={() => handleCancelAppointment(cancelAppt)}
+                    className="flex-1 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition text-sm cursor-pointer"
+                  >취소하기</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* 그룹 스케줄 모달 */}
-      {selectedGroup && (
+      {selectedGroup && currentUser && (
         <GroupScheduleModal
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           groupName={selectedGroup.name}
           memberNicknames={selectedGroup.members}
           creatorNickname={selectedGroup.creator}
+          appointments={appointments.filter(appt =>
+            appt.participants.includes(currentUser?.nickname ?? '') &&
+            selectedGroup.members.every(m => appt.participants.includes(m))
+          )}
+          onAddAppointment={({ name, day, startHour, endHour }) => {
+            if (!currentUser || !selectedGroup) return;
+            if (startHour >= endHour) { alert('종료 시간은 시작 시간보다 늦어야 합니다.'); return; }
+            const appt: Appointment = {
+              id: Date.now().toString(),
+              name: name || '약속',
+              day, startHour, endHour,
+              participants: [currentUser.nickname, ...selectedGroup.members.filter(m => m !== currentUser.nickname)],
+              acceptedBy: [currentUser.nickname],
+              createdAt: new Date().toISOString(),
+              status: 'pending',
+            };
+            const updated = [...appointments, appt];
+            setAppointments(updated);
+            localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+            const dayName = ['월','화','수','목','금','토','일'][appt.day];
+            selectedGroup.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
+              saveNotification(memberNickname, {
+                type: 'appointment_invite',
+                message: `📩 ${currentUser.nickname}님이 [${selectedGroup.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+                appointment: appt,
+              });
+            });
+          }}
+          onAppointmentClick={(appt) => setCancelAppt(appt)}
+          currentUserNickname={currentUser.nickname}
+          friendNicknames={friends.map(f => f.nickname)}
+          onInviteMember={(nickname, isFriend) => handleInviteToGroup(nickname, isFriend)}
+          onGroupNameChange={(newName) => handleRenameGroup(selectedGroup.id, newName)}
         />
       )}
       
@@ -1024,6 +1891,41 @@ export default function Home() {
         />
       )}
       
+      {/* 친구 삭제 확인 모달 */}
+      {deleteConfirmFriend && (
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <span className="text-3xl">👤</span>
+              </div>
+              <h3 className="text-lg font-bold text-black mb-2">친구 삭제</h3>
+              <p className="text-center text-black mb-2">
+                <span className="font-bold text-red-600">{deleteConfirmFriend.nickname}</span>님을 친구 명단에서 삭제하시겠습니까?
+              </p>
+              <p className="text-center text-sm text-gray-500">이 작업은 취소할 수 없습니다.</p>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmFriend(null)}
+                className="flex-1 px-6 py-3 bg-gray-100 text-gray-700 font-semibold rounded-lg hover:bg-gray-200 transition cursor-pointer"
+              >
+                취소
+              </button>
+              <button
+                onClick={() => {
+                  handleRemoveFriend(deleteConfirmFriend.id);
+                  setDeleteConfirmFriend(null);
+                }}
+                className="flex-1 px-6 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition cursor-pointer"
+              >
+                삭제
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 그룹 삭제 확인 모달 */}
       {deleteConfirmGroup && (
         <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -1045,17 +1947,15 @@ export default function Home() {
                 </svg>
               </div>
               <h2 className="text-2xl font-bold text-black mb-2">
-                그룹 삭제
+                그룹 나가기
               </h2>
             </div>
             
             <div className="mb-6">
               <p className="text-center text-black mb-2">
-                <span className="font-bold text-red-600">{deleteConfirmGroup.name}</span> 그룹을 삭제하시겠습니까?
+                <span className="font-bold text-red-600">{deleteConfirmGroup.name}</span> 그룹에서 나가시겠습니까?
               </p>
-              <p className="text-center text-sm text-gray-500">
-                이 작업은 취소할 수 없습니다.
-              </p>
+              <p className="text-center text-sm text-gray-500">다른 멤버들에게 알림이 전송됩니다.</p>
             </div>
             
             <div className="flex gap-3">
@@ -1067,8 +1967,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => {
-                  handleDeleteGroup(deleteConfirmGroup.id);
-                  setDeleteConfirmGroup(null);
+                  handleLeaveGroup(deleteConfirmGroup);
                 }}
                 className="flex-1 px-6 py-3 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 hover:scale-[1.01] transition-all duration-200 cursor-pointer"
               >

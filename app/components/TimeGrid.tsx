@@ -5,13 +5,17 @@ import React, { useState, useRef, useEffect } from 'react';
 const DAYS = ['월요일', '화요일', '수요일', '목요일', '금요일', '토요일', '일요일'];
 const HOURS = Array.from({ length: 24 }, (_, i) => i);
 
+
+
 interface TimeGridProps {
   schedule: boolean[][];
   onChange: (newSchedule: boolean[][]) => void;
   title: string;
+  appointments?: { day: number; startHour: number; endHour: number; name: string; id: string; status?: string }[];
+  onAppointmentClick?: (apptId: string) => void;
 }
 
-export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
+export default function TimeGrid({ schedule, onChange, title, appointments = [], onAppointmentClick }: TimeGridProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragMode, setDragMode] = useState<boolean | null>(null);
   const [editMode, setEditMode] = useState(false); // 모바일 편집 모드 토글
@@ -22,11 +26,13 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
   const editModeRef = useRef(false);
   editModeRef.current = editMode;
 
-  // 최신 schedule/onChange를 ref에 저장 (native 이벤트 핸들러에서 사용)
+  // 최신 schedule/onChange/onAppointmentClick를 ref에 저장 (native 이벤트 핸들러에서 사용)
   const scheduleRef = useRef(schedule);
   scheduleRef.current = schedule;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onAppointmentClickRef = useRef(onAppointmentClick);
+  onAppointmentClickRef.current = onAppointmentClick;
 
   const fillCellsBetween = (
     fromDay: number, fromHour: number,
@@ -74,10 +80,20 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
     };
 
     const onTouchStart = (e: TouchEvent) => {
+      const touch = e.touches[0];
+
+      // 약속 칸 터치 → 약속 클릭 핸들러 호출 (편집 모드 여부와 무관)
+      const target = document.elementFromPoint(touch.clientX, touch.clientY) as HTMLElement | null;
+      const apptId = target?.getAttribute('data-appt-id');
+      if (apptId) {
+        e.preventDefault();
+        onAppointmentClickRef.current?.(apptId);
+        return;
+      }
+
       // 편집 모드가 아니면 스크롤 허용
       if (!editModeRef.current) return;
 
-      const touch = e.touches[0];
       const cell = getCellAt(touch.clientX, touch.clientY);
       if (!cell) return;
 
@@ -236,8 +252,18 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
         <div className="flex items-center gap-2">
           <div className="w-4 h-4 bg-green-400 border border-gray-300 rounded"></div>
           <span className="text-gray-700">바쁨 (일정 있음)</span>
-        </div>
-      </div>
+        </div>        {appointments.length > 0 && (
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-blue-500 border border-gray-300 rounded"></div>
+            <span className="text-gray-700">확정 약속</span>
+          </div>
+        )}
+        {appointments.some(a => a.status === 'pending') && (
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-yellow-200 border border-gray-300 rounded"></div>
+            <span className="text-gray-700">대기 중 (미수락)</span>
+          </div>
+        )}      </div>
 
       <div
         ref={gridRef}
@@ -272,19 +298,36 @@ export default function TimeGrid({ schedule, onChange, title }: TimeGridProps) {
               </div>
               {HOURS.map((_, hourIdx) => {
                 const isBusy = schedule[dayIdx][hourIdx];
+                const appt = appointments.find(
+                  a => a.day === dayIdx && hourIdx >= a.startHour && hourIdx < a.endHour
+                );
+                const isPending = appt?.status === 'pending';
                 return (
                   <div
                     key={`${dayIdx}-${hourIdx}`}
                     data-day={dayIdx}
                     data-hour={hourIdx}
+                    data-appt-id={appt ? appt.id : undefined}
                     style={{ touchAction: 'none' }}
+                    title={appt
+                      ? isPending
+                        ? `${appt.name} (대기 중 - 참여자 수락 필요)`
+                        : `${appt.name} (클릭하여 수정/취소)`
+                      : undefined}
+                    onPointerDown={appt ? (e) => e.stopPropagation() : undefined}
+                    onClick={appt && onAppointmentClick ? (e) => { e.stopPropagation(); onAppointmentClick(appt.id); } : undefined}
                     className={`
                       border-b border-r border-gray-200
-                      cursor-pointer transition-all duration-150
-                      hover:ring-2 hover:ring-brand-300 hover:z-10
+                      transition-all duration-150
+                      hover:ring-2 hover:z-10
                       min-h-[32px]
-                      ${isBusy ? 'bg-green-400 hover:bg-green-500' : 'bg-white hover:bg-gray-100'}
-                      ${isDragging && dragMode !== null ? 'cursor-grabbing' : 'cursor-grab'}
+                      ${appt
+                        ? isPending
+                          ? 'bg-yellow-200 hover:bg-yellow-300 hover:ring-yellow-300 cursor-pointer'
+                          : 'bg-blue-500 hover:bg-blue-400 hover:ring-blue-300 cursor-pointer'
+                        : isBusy
+                          ? 'bg-green-400 hover:bg-green-500 hover:ring-brand-300'
+                          : 'bg-white hover:bg-gray-100 hover:ring-brand-300'}
                     `}
                   />
                 );

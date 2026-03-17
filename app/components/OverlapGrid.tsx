@@ -89,10 +89,6 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
 
   return (
     <div className="w-full">
-      <h2 className="text-xl font-bold mb-4 text-black">
-        시간표 비교 ({totalPeople}명)
-      </h2>
-      
       {/* 범례 */}
       <div className="mb-4 flex flex-wrap gap-x-3 gap-y-2 text-sm">
         <div className="flex items-center gap-1.5 whitespace-nowrap">

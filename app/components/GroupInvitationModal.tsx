@@ -42,6 +42,16 @@ export default function GroupInvitationModal({
           </h2>
         </div>
 
+        {/* 비친구 경고 배너 */}
+        {invitation.fromNonFriend && (
+          <div className="mb-4 p-3 bg-amber-50 border border-amber-300 rounded-lg flex items-start gap-2">
+            <span className="text-amber-500 text-lg flex-shrink-0">⚠️</span>
+            <p className="text-sm text-amber-700 font-medium">
+              친구가 아닌 유저가 보낸 초대입니다. 신중하게 수락 여부를 결정하세요.
+            </p>
+          </div>
+        )}
+
         {/* 초대 정보 */}
         <div className="mb-6 p-4 bg-gray-50 rounded-lg">
           <p className="text-center text-black mb-4">
