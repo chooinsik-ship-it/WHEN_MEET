@@ -282,6 +282,12 @@ export default function Home() {
       loadUser(friendId),
     ]);
 
+    // DB에 등록되지 않은 사용자 차단
+    if (!friendUserData) {
+      alert('존재하지 않는 사용자입니다. 닉네임을 확인해주세요.');
+      return;
+    }
+
     const friendLocation = friendUserData?.location as string | undefined;
 
     const newFriend = {
