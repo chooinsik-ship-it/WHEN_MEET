@@ -65,6 +65,7 @@ export default function GroupScheduleModal({
   const [apptStart, setApptStart] = useState(14);
   const [apptEnd, setApptEnd] = useState(16);
   const [inviteInput, setInviteInput] = useState('');
+  const [inviteDropdownOpen, setInviteDropdownOpen] = useState(false);
   // 그룹명 인라인 편집
   const [isEditingName, setIsEditingName] = useState(false);
   const [editNameInput, setEditNameInput] = useState(groupName);
@@ -387,54 +388,67 @@ export default function GroupScheduleModal({
                   <div className="mt-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
                     <h3 className="text-base font-bold text-purple-700 mb-3">👥 그룹 초대하기</h3>
 
-                    {/* 친구 목록 (그룹 미참여자만) */}
-                    {invitableFriends.length > 0 && (
-                      <div className="mb-4">
-                        <p className="text-xs text-gray-500 mb-2 font-medium">💙 친구 목록</p>
-                        <div className="flex flex-wrap gap-2">
-                          {invitableFriends.map(nickname => (
-                            <button
-                              key={nickname}
-                              onClick={() => onInviteMember(nickname, true)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-purple-300 rounded-full text-sm hover:bg-purple-100 transition cursor-pointer"
-                            >
-                              <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-semibold">친구</span>
-                              <span className="text-black">{nickname}</span>
-                              <span className="text-purple-400 text-xs">+ 초대</span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* 직접 입력 */}
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={inviteInput}
-                        onChange={(e) => setInviteInput(e.target.value)}
-                        placeholder="닉네임으로 초대"
-                        className="flex-1 px-3 py-2 border border-purple-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
-                        maxLength={20}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' && inputTrimmed && !inputAlreadyIn && !inputIsSelf) {
+                    {/* 직접 입력 + 드롭다운 */}
+                    <div className="relative">
+                      <div className="flex gap-2">
+                        <input
+                          type="text"
+                          value={inviteInput}
+                          onChange={(e) => setInviteInput(e.target.value)}
+                          placeholder="닉네임으로 초대"
+                          className="flex-1 px-3 py-2 border border-purple-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-purple-400"
+                          maxLength={20}
+                          onFocus={() => setInviteDropdownOpen(true)}
+                          onBlur={() => setTimeout(() => setInviteDropdownOpen(false), 150)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' && inputTrimmed && !inputAlreadyIn && !inputIsSelf) {
+                              onInviteMember(inputTrimmed, inputIsFriend);
+                              setInviteInput('');
+                              setInviteDropdownOpen(false);
+                            }
+                          }}
+                        />
+                        <button
+                          onClick={() => {
+                            if (!inputTrimmed) return;
+                            if (inputAlreadyIn) { alert('이미 그룹에 있는 멤버입니다.'); return; }
+                            if (inputIsSelf) { alert('자기 자신은 초대할 수 없습니다.'); return; }
                             onInviteMember(inputTrimmed, inputIsFriend);
                             setInviteInput('');
-                          }
-                        }}
-                      />
-                      <button
-                        onClick={() => {
-                          if (!inputTrimmed) return;
-                          if (inputAlreadyIn) { alert('이미 그룹에 있는 멤버입니다.'); return; }
-                          if (inputIsSelf) { alert('자기 자신은 초대할 수 없습니다.'); return; }
-                          onInviteMember(inputTrimmed, inputIsFriend);
-                          setInviteInput('');
-                        }}
-                        className="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition text-sm cursor-pointer"
-                      >
-                        초대
-                      </button>
+                            setInviteDropdownOpen(false);
+                          }}
+                          className="px-4 py-2 bg-purple-500 text-white font-semibold rounded-lg hover:bg-purple-600 transition text-sm cursor-pointer"
+                        >
+                          초대
+                        </button>
+                      </div>
+
+                      {/* 친구 드롭다운 */}
+                      {inviteDropdownOpen && invitableFriends.length > 0 && (() => {
+                        const filtered = inviteInput.trim()
+                          ? invitableFriends.filter(n => n.toLowerCase().includes(inviteInput.trim().toLowerCase()))
+                          : invitableFriends;
+                        if (filtered.length === 0) return null;
+                        return (
+                          <div className="absolute left-0 right-10 mt-1 bg-white border border-purple-200 rounded-lg shadow-lg z-10 max-h-48 overflow-y-auto">
+                            {filtered.map(nickname => (
+                              <button
+                                key={nickname}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => {
+                                  onInviteMember(nickname, true);
+                                  setInviteInput('');
+                                  setInviteDropdownOpen(false);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2.5 hover:bg-purple-50 transition text-left cursor-pointer"
+                              >
+                                <span className="text-xs bg-purple-100 text-purple-600 px-1.5 py-0.5 rounded-full font-semibold flex-shrink-0">친구</span>
+                                <span className="text-black text-sm">{nickname}</span>
+                              </button>
+                            ))}
+                          </div>
+                        );
+                      })()}
                     </div>
 
                     {/* 비친구 경고 */}

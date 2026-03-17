@@ -492,11 +492,6 @@ export default function Home() {
       return;
     }
 
-    if (!memberNicknames.trim()) {
-      alert('멤버 닉네임을 입력해주세요.');
-      return;
-    }
-
     if (!currentUser) return;
 
     // 쉼표로 구분된 닉네임 배열로 변환 (공백 제거)
@@ -504,11 +499,6 @@ export default function Home() {
       .split(',')
       .map(name => name.trim())
       .filter(name => name.length > 0);
-
-    if (members.length === 0) {
-      alert('유효한 멤버 닉네임을 입력해주세요.');
-      return;
-    }
 
     const newGroup: Group = {
       id: Date.now().toString(),
@@ -527,21 +517,22 @@ export default function Home() {
     const savedGroups = [...groups, newGroup];
     localStorage.setItem(`groups_${currentUser.id}`, JSON.stringify(savedGroups));
     
-    // 각 멤버에게 그룹 초대 저장
-    const invitation: GroupInvitation = {
-      groupId: newGroup.id,
-      groupName: newGroup.name,
-      creatorNickname: currentUser.nickname,
-      creatorId: currentUser.id,
-      members: members,
-      createdAt: newGroup.createdAt,
-    };
-    
-    members.forEach(memberNickname => {
-      saveGroupInvitation(memberNickname, invitation);
-    });
-    
-    alert(`그룹이 생성되었고, ${members.length}명의 멤버에게 초대가 전송되었습니다!`);
+    if (members.length > 0) {
+      const invitation = {
+        groupId: newGroup.id,
+        groupName: newGroup.name,
+        creatorNickname: currentUser.nickname,
+        creatorId: currentUser.id,
+        members: members,
+        createdAt: newGroup.createdAt,
+      };
+      members.forEach(memberNickname => {
+        saveGroupInvitation(memberNickname, invitation);
+      });
+      alert(`그룹이 생성되었고, ${members.length}명의 멤버에게 초대가 전송되었습니다!`);
+    } else {
+      alert('그룹이 생성되었습니다!');
+    }
   };
 
   /**
@@ -1511,15 +1502,54 @@ export default function Home() {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black"
                         maxLength={30}
                       />
-                      <textarea
-                        value={memberNicknames}
-                        onChange={(e) => setMemberNicknames(e.target.value)}
-                        placeholder="멤버 닉네임을 쉼표로 구분하여 입력 (예: 민수, 밍숭, 갯밍숭달팽이)"
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none"
-                        rows={3}
-                      />
-                      <div className="text-sm text-gray-600">
-                        💡 팁: 쉼표(,)로 구분하여 여러 멤버를 추가할 수 있습니다.
+                      {/* 친구 목록 태그 */}
+                      {friends.length > 0 && (() => {
+                        const selectedSet = new Set(
+                          memberNicknames.split(',').map(s => s.trim()).filter(Boolean)
+                        );
+                        return (
+                          <div>
+                            <p className="text-xs text-gray-500 mb-2 font-medium">💙 친구 클릭하여 추가/제거</p>
+                            <div className="flex flex-wrap gap-2">
+                              {friends.map(f => {
+                                const isAdded = selectedSet.has(f.nickname);
+                                return (
+                                  <button
+                                    key={f.id}
+                                    type="button"
+                                    onClick={() => {
+                                      const cur = memberNicknames.split(',').map(s => s.trim()).filter(Boolean);
+                                      if (isAdded) {
+                                        setMemberNicknames(cur.filter(n => n !== f.nickname).join(', '));
+                                      } else {
+                                        setMemberNicknames([...cur, f.nickname].join(', '));
+                                      }
+                                    }}
+                                    className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm border transition cursor-pointer ${
+                                      isAdded
+                                        ? 'bg-brand-500 text-white border-brand-600'
+                                        : 'bg-white text-gray-700 border-gray-300 hover:border-brand-400 hover:text-brand-600'
+                                    }`}
+                                  >
+                                    {isAdded && <span>✓</span>}
+                                    {f.nickname}
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">직접 입력 (쉼표로 구분) — 비워두면 그룹만 생성</p>
+                        <textarea
+                          value={memberNicknames}
+                          onChange={(e) => setMemberNicknames(e.target.value)}
+                          placeholder="멤버 닉네임 (예: 민수, 밍숭)"
+                          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none text-sm"
+                          rows={2}
+                        />
                       </div>
                       <button
                         type="submit"
