@@ -100,6 +100,11 @@ export default function Home() {
   // 현재 활성화된 탭
   const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
 
+  // 빠른 입력 취침 시간 (null = 없음, 0~23 = 해당 시각에 취침)
+  const [sleepTime, setSleepTime] = useState<number | null>(null);
+  // 빠른 입력 선택된 일과 템플릿
+  const [selectedTemplate, setSelectedTemplate] = useState<{ label: string; start: number; end: number } | null>(null);
+
   /**
    * 페이지 로드 시 localStorage에서 사용자 복원
    */
@@ -512,9 +517,12 @@ export default function Home() {
               </p>
             </div>
           ) : (
-            <p className="text-black text-center">
-              닉네임을 입력하고 나만의 시간표를 관리하세요
-            </p>
+            <div className="text-center space-y-1">
+              <p className="text-black">
+                <span className="font-semibold">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold">자동 추천</span>해드려요.
+              </p>
+              <p className="text-sm text-gray-500">나만의 시간표를 관리하세요</p>
+            </div>
           )}
         </header>
 
@@ -542,6 +550,23 @@ export default function Home() {
             <p className="text-gray-600 mb-6">
               닉네임을 입력하면 시간표를 저장하고 관리할 수 있습니다.
             </p>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-gray-600">
+              <div className="p-3 bg-brand-50 rounded-lg">
+                <p className="text-2xl mb-1">🗓️</p>
+                <p className="font-semibold text-black">내 시간표</p>
+                <p>드래그로 바쁜 시간 표시</p>
+              </div>
+              <div className="p-3 bg-brand-50 rounded-lg">
+                <p className="text-2xl mb-1">🔍</p>
+                <p className="font-semibold text-black">친구와 비교</p>
+                <p>격치는 여유 시간 자동 추천</p>
+              </div>
+              <div className="p-3 bg-brand-50 rounded-lg">
+                <p className="text-2xl mb-1">🚇</p>
+                <p className="font-semibold text-black">중간 지점</p>
+                <p>거주지 기반 지하철역 추천</p>
+              </div>
+            </div>
           </div>
         ) : (
           <>
@@ -592,6 +617,104 @@ export default function Home() {
             <div className="bg-white rounded-lg shadow-lg p-3 sm:p-6">
               {activeTab === 'my' ? (
                 <div>
+                  {/* 빠른 시간표 템플릿 */}
+                  {(() => {
+                    const applyTemplate = (start: number, end: number, sleep: number | null, label: string) => {
+                      setSelectedTemplate({ label, start, end });
+                      const s = mySchedule.map((day, dIdx) =>
+                        day.map((_, hIdx) => {
+                          if (dIdx >= 5) return mySchedule[dIdx][hIdx];
+                          const isWork = hIdx >= start && hIdx < end;
+                          let isSleep = false;
+                          if (sleep !== null) {
+                            if (sleep < start) {
+                              isSleep = hIdx >= sleep && hIdx < start;
+                            } else if (sleep > end - 1) {
+                              isSleep = hIdx >= sleep || hIdx < start;
+                            }
+                          }
+                          return isWork || isSleep;
+                        })
+                      );
+                      setMySchedule(s);
+                    };
+                    const workTemplates = [
+                      { label: '직장인 08~17', start: 8, end: 17 },
+                      { label: '직장인 09~18', start: 9, end: 18 },
+                      { label: '직장인 10~19', start: 10, end: 19 },
+                    ];
+                    const studentTemplates = [
+                      { label: '초등학생', start: 9, end: 15 },
+                      { label: '중학생', start: 8, end: 16 },
+                      { label: '고등학생', start: 8, end: 22 },
+                    ];
+                    return (
+                      <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+                        <p className="text-sm font-semibold text-gray-700 mb-2">⚡ 빠른 입력</p>
+                        {/* 취침 시간 선택 */}
+                        <div className="mb-3">
+                          <p className="text-xs text-gray-500 mb-1.5">🌙 취침 시간</p>
+                          <div className="flex flex-wrap gap-1">
+                            {([null, ...Array.from({ length: 24 }, (_, i) => i)] as (number | null)[]).map((t) => {
+                              const label = t === null ? '없음' : `${String(t).padStart(2, '0')}시`;
+                              const active = sleepTime === t;
+                              return (
+                                <button
+                                  key={label}
+                                  onClick={() => {
+                                    setSleepTime(t);
+                                    if (selectedTemplate) {
+                                      applyTemplate(selectedTemplate.start, selectedTemplate.end, t, selectedTemplate.label);
+                                    }
+                                  }}
+                                  className={`px-2 py-1 text-xs font-medium rounded-lg border transition cursor-pointer ${
+                                    active
+                                      ? 'bg-indigo-500 text-white border-indigo-500'
+                                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {/* 직장인 */}
+                          {workTemplates.map(({ label, start, end }) => (
+                            <button
+                              key={label}
+                              onClick={() => applyTemplate(start, end, sleepTime, label)}
+                              className={`px-3 py-1.5 text-xs font-medium border rounded-lg transition cursor-pointer ${
+                                selectedTemplate?.label === label
+                                  ? 'bg-blue-500 text-white border-blue-500'
+                                  : 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                              }`}
+                            >
+                              💼 {label}
+                            </button>
+                          ))}
+                          {/* 학생 */}
+                          {studentTemplates.map(({ label, start, end }) => (
+                            <button
+                              key={label}
+                              onClick={() => applyTemplate(start, end, sleepTime, label)}
+                              className={`px-3 py-1.5 text-xs font-medium border rounded-lg transition cursor-pointer ${
+                                selectedTemplate?.label === label
+                                  ? 'bg-green-500 text-white border-green-500'
+                                  : 'bg-green-50 text-green-700 border-green-200 hover:bg-green-100'
+                              }`}
+                            >
+                              🎒 {label}
+                            </button>
+                          ))}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-2">
+                          월~금 기준으로 바쁜 시간을 채워드려요.{sleepTime !== null ? ` 취침(${String(sleepTime).padStart(2, '0')}시) + 근무·수업 시간이 함께 적용됩니다.` : ' 취침 시간을 설정하면 수면 구간도 함께 채워져요.'}
+                        </p>
+                      </div>
+                    );
+                  })()}
                   <TimeGrid
                     schedule={mySchedule}
                     onChange={setMySchedule}

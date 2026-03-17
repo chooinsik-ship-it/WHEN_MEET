@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 
 interface User {
   id: number;
@@ -34,6 +34,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
 
   // 아바타 탭
   const [selectedAvatar, setSelectedAvatar] = useState<string>('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // 닉네임 변경 탭
   const [newNickname, setNewNickname] = useState('');
@@ -98,6 +99,21 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
     const updated = { ...currentUser, avatar: selectedAvatar };
     onUpdateProfile?.(updated);
     setShowProfileModal(false);
+  };
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      alert('이미지 크기는 2MB 이하여야 합니다.');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target?.result as string;
+      setSelectedAvatar(dataUrl);
+    };
+    reader.readAsDataURL(file);
   };
 
   const handleNicknameChange = async (e: React.FormEvent) => {
@@ -222,6 +238,15 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
   // 아바타 표시 헬퍼
   const AvatarDisplay = () => {
     const avatar = currentUser?.avatar;
+    if (avatar?.startsWith('data:') || avatar?.startsWith('http')) {
+      return (
+        <img
+          src={avatar}
+          alt="avatar"
+          className="w-8 h-8 rounded-full object-cover"
+        />
+      );
+    }
     if (avatar) {
       return (
         <span className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-base">
@@ -259,7 +284,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
           <button
             type="submit"
             disabled={loading}
-            className="px-4 sm:px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition whitespace-nowrap disabled:opacity-60 text-sm sm:text-base"
+            className="px-4 sm:px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition whitespace-nowrap disabled:opacity-60 text-sm sm:text-base cursor-pointer"
           >
             {loading ? '...' : '시작하기'}
           </button>
@@ -272,7 +297,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
 
   return (
     <>
-      <div className="flex items-center gap-3 bg-gray-300 px-4 py-2 rounded-lg">
+      <div className="flex items-center gap-3 bg-gray-200 px-4 py-2 rounded-lg">
         <button
           onClick={openModal}
           title="프로필 설정"
@@ -288,7 +313,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
         </div>
         <button
           onClick={onLogout}
-          className="px-3 py-1 bg-gray-400 text-black text-sm rounded hover:bg-gray-500 transition"
+          className="px-3 py-1 bg-gray-300 text-white text-sm rounded hover:bg-gray-400 transition cursor-pointer"
         >
           로그아웃
         </button>
@@ -301,7 +326,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
             {/* 모달 헤더 */}
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
               <h2 className="text-lg font-bold text-black">프로필 설정</h2>
-              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none cursor-pointer">✕</button>
             </div>
 
             {/* 탭 */}
@@ -312,7 +337,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                   <button
                     key={tab}
                     onClick={() => setProfileTab(tab)}
-                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors cursor-pointer ${
                       profileTab === tab
                         ? 'border-b-2 border-brand-500 text-brand-600'
                         : 'text-gray-500 hover:text-gray-700'
@@ -328,16 +353,38 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
               {/* 아바타 탭 */}
               {profileTab === 'avatar' && (
                 <div>
-                  <p className="text-sm text-gray-500 mb-3">사용할 아바타 이모지를 선택하세요</p>
+                  <p className="text-sm text-gray-500 mb-3">아바타 이모지를 선택하거나 이미지를 업로드하세요</p>
+                  {/* 미리보기 */}
                   <div className="flex justify-center mb-4">
-                    <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center text-3xl border-2 border-brand-300">
-                      {selectedAvatar || currentUser.nickname[0].toUpperCase()}
+                    <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center text-3xl border-2 border-brand-300 overflow-hidden">
+                      {selectedAvatar?.startsWith('data:') || selectedAvatar?.startsWith('http') ? (
+                        <img src={selectedAvatar} alt="preview" className="w-full h-full object-cover" />
+                      ) : (
+                        selectedAvatar || currentUser.nickname[0].toUpperCase()
+                      )}
                     </div>
                   </div>
+                  {/* 이미지 업로드 버튼 */}
+                  <div className="mb-4">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageUpload}
+                    />
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-full py-2 border-2 border-dashed border-gray-300 text-gray-500 rounded-lg hover:border-brand-400 hover:text-brand-600 transition text-sm cursor-pointer"
+                    >
+                      📁 PC에서 이미지 선택 (최대 2MB)
+                    </button>
+                  </div>
+                  {/* 이모지 그리드 */}
                   <div className="grid grid-cols-6 gap-2 mb-4">
                     <button
                       onClick={() => setSelectedAvatar('')}
-                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition ${
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition cursor-pointer ${
                         selectedAvatar === ''
                           ? 'bg-brand-500 text-white ring-2 ring-brand-400'
                           : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
@@ -349,7 +396,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                       <button
                         key={emoji}
                         onClick={() => setSelectedAvatar(emoji)}
-                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition ${
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition cursor-pointer ${
                           selectedAvatar === emoji
                             ? 'bg-brand-100 ring-2 ring-brand-400 scale-110'
                             : 'hover:bg-gray-100'
@@ -361,7 +408,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                   </div>
                   <button
                     onClick={handleAvatarSave}
-                    className="w-full py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition"
+                    className="w-full py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition cursor-pointer"
                   >
                     저장
                   </button>
@@ -399,8 +446,8 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                   </div>
                   {nicknameError && <p className="text-xs text-red-500">{nicknameError}</p>}
                   <div className="flex gap-2">
-                    <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm">취소</button>
-                    <button type="submit" disabled={nicknameLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60">
+                    <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer">취소</button>
+                    <button type="submit" disabled={nicknameLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60 cursor-pointer">
                       {nicknameLoading ? '변경 중...' : '변경하기'}
                     </button>
                   </div>
@@ -449,8 +496,8 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                     </div>
                     {pwError && <p className="text-xs text-red-500">{pwError}</p>}
                     <div className="flex gap-2 mt-1">
-                      <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm">취소</button>
-                      <button type="submit" disabled={pwLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60">
+                      <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer">취소</button>
+                      <button type="submit" disabled={pwLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60 cursor-pointer">
                         {pwLoading ? '변경 중...' : '변경하기'}
                       </button>
                     </div>
