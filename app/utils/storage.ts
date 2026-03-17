@@ -296,7 +296,7 @@ export interface Appointment {
  */
 export interface AppNotification {
   id: string;
-  type: 'appointment_cancelled' | 'appointment_invite' | 'appointment_accepted' | 'appointment_rejected' | 'friend_request' | 'friend_accepted' | 'friend_rejected';
+  type: 'appointment_cancelled' | 'appointment_invite' | 'appointment_accepted' | 'appointment_rejected' | 'friend_request' | 'friend_accepted' | 'friend_rejected' | 'friend_removed';
   message: string;
   appointment?: Appointment;
   /** 친구 요청 발신자 닉네임 */

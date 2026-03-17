@@ -481,11 +481,26 @@ export default function Home() {
    * 친구 제거
    */
   const handleRemoveFriend = (friendId: number) => {
+    const removedFriend = friends.find(f => f.id === friendId);
     const updatedFriends = friends.filter(f => f.id !== friendId);
     setFriends(updatedFriends);
     setSelectedFriendIds(prev => prev.filter(id => id !== friendId));
     if (currentUser) {
+      // 내 친구 목록에서 제거
       localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+
+      if (removedFriend) {
+        // 상대방 친구 목록에서 나를 제거
+        const theirKey = `friends_${friendId}`;
+        const theirList: string[] = JSON.parse(localStorage.getItem(theirKey) || '[]');
+        localStorage.setItem(theirKey, JSON.stringify(theirList.filter(n => n !== currentUser.nickname)));
+
+        // 상대방에게 알림 전송
+        saveNotification(removedFriend.nickname, {
+          type: 'friend_removed',
+          message: `💔 ${currentUser.nickname}님이 친구를 삭제했습니다.`,
+        });
+      }
     }
   };
 
