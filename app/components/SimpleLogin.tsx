@@ -6,25 +6,42 @@ interface User {
   id: number;
   nickname: string;
   location?: string;
+  avatar?: string;
 }
 
 interface SimpleLoginProps {
   onLogin: (user: User) => void;
   onLogout: () => void;
   currentUser: User | null;
+  onUpdateProfile?: (user: User) => void;
 }
 
-/**
- * 간단한 닉네임 로그인 컴포넌트
- */
-export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLoginProps) {
+const AVATAR_EMOJIS = [
+  '😊', '😎', '🥳', '😸', '🐱', '🐶', '🦊', '🐻', '🐼', '🐸',
+  '🐙', '🦋', '🌸', '⭐', '🌙', '🎮', '🎵', '🏆', '🍕', '🍦',
+  '🌈', '🦄', '🎯', '🔥', '💎', '🌊', '🍀', '🎸', '🚀', '👑',
+];
+
+export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdateProfile }: SimpleLoginProps) {
   const [nickname, setNickname] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 비밀번호 변경 모달
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  // 프로필 설정 모달
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [profileTab, setProfileTab] = useState<'avatar' | 'nickname' | 'password'>('avatar');
+
+  // 아바타 탭
+  const [selectedAvatar, setSelectedAvatar] = useState<string>('');
+
+  // 닉네임 변경 탭
+  const [newNickname, setNewNickname] = useState('');
+  const [newNicknamePw, setNewNicknamePw] = useState('');
+  const [nicknameError, setNicknameError] = useState('');
+  const [nicknameLoading, setNicknameLoading] = useState(false);
+
+  // 비밀번호 변경 탭
   const [currentPw, setCurrentPw] = useState('');
   const [newPw, setNewPw] = useState('');
   const [confirmPw, setConfirmPw] = useState('');
@@ -76,6 +93,67 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLo
     }
   };
 
+  const handleAvatarSave = () => {
+    if (!currentUser) return;
+    const updated = { ...currentUser, avatar: selectedAvatar };
+    onUpdateProfile?.(updated);
+    setShowProfileModal(false);
+  };
+
+  const handleNicknameChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setNicknameError('');
+
+    if (!newNickname.trim()) {
+      setNicknameError('새 닉네임을 입력해주세요.');
+      return;
+    }
+    if (newNickname.trim() === currentUser?.nickname) {
+      setNicknameError('현재 닉네임과 동일합니다.');
+      return;
+    }
+    if (!newNicknamePw.trim()) {
+      setNicknameError('현재 비밀번호를 입력해주세요.');
+      return;
+    }
+    if (!currentUser) return;
+
+    setNicknameLoading(true);
+    try {
+      const verifyRes = await fetch(`/api/auth/${currentUser.id}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newNicknamePw }),
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyData.success) {
+        setNicknameError('비밀번호가 틀렸습니다.');
+        return;
+      }
+
+      const newId = Math.abs(
+        newNickname.trim().split('').reduce((acc, char) => {
+          return ((acc << 5) - acc) + char.charCodeAt(0);
+        }, 0)
+      );
+
+      // 새 닉네임으로 동일 비밀번호 등록
+      await fetch(`/api/auth/${newId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password: newNicknamePw }),
+      });
+
+      closeModal();
+      onLogout();
+      onLogin({ id: newId, nickname: newNickname.trim(), avatar: currentUser.avatar });
+    } catch {
+      setNicknameError('서버 오류가 발생했습니다.');
+    } finally {
+      setNicknameLoading(false);
+    }
+  };
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
     setPwError('');
@@ -106,11 +184,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLo
 
       setPwSuccess(true);
       setTimeout(() => {
-        setShowPasswordModal(false);
-        setCurrentPw('');
-        setNewPw('');
-        setConfirmPw('');
-        setPwSuccess(false);
+        closeModal();
       }, 1500);
     } catch {
       setPwError('서버 오류가 발생했습니다.');
@@ -119,13 +193,47 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLo
     }
   };
 
-  const closeModal = () => {
-    setShowPasswordModal(false);
+  const openModal = () => {
+    setSelectedAvatar(currentUser?.avatar ?? '');
+    setProfileTab('avatar');
+    setNewNickname('');
+    setNewNicknamePw('');
+    setNicknameError('');
     setCurrentPw('');
     setNewPw('');
     setConfirmPw('');
     setPwError('');
     setPwSuccess(false);
+    setShowProfileModal(true);
+  };
+
+  const closeModal = () => {
+    setShowProfileModal(false);
+    setNewNickname('');
+    setNewNicknamePw('');
+    setNicknameError('');
+    setCurrentPw('');
+    setNewPw('');
+    setConfirmPw('');
+    setPwError('');
+    setPwSuccess(false);
+  };
+
+  // 아바타 표시 헬퍼
+  const AvatarDisplay = () => {
+    const avatar = currentUser?.avatar;
+    if (avatar) {
+      return (
+        <span className="w-8 h-8 rounded-full bg-brand-100 flex items-center justify-center text-base">
+          {avatar}
+        </span>
+      );
+    }
+    return (
+      <span className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold text-sm">
+        {currentUser?.nickname[0].toUpperCase()}
+      </span>
+    );
   };
 
   if (!currentUser) {
@@ -164,90 +272,192 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser }: SimpleLo
 
   return (
     <>
-      <div className="flex items-center gap-3 bg-gray-100 px-4 py-2 rounded-lg">
+      <div className="flex items-center gap-3 bg-gray-300 px-4 py-2 rounded-lg">
         <button
-          onClick={() => setShowPasswordModal(true)}
-          title="비밀번호 변경"
-          className="w-8 h-8 rounded-full bg-brand-500 flex items-center justify-center text-white font-bold hover:bg-brand-600 transition cursor-pointer"
+          onClick={openModal}
+          title="프로필 설정"
+          className="flex-shrink-0 hover:opacity-80 transition cursor-pointer"
         >
-          {currentUser.nickname[0].toUpperCase()}
+          <AvatarDisplay />
         </button>
         <div className="flex flex-col">
           <span className="font-medium text-black">{currentUser.nickname}</span>
           {currentUser.location && (
-            <span className="text-xs text-gray-600">📍 {currentUser.location}</span>
+            <span className="text-xs text-gray-600">{currentUser.location}</span>
           )}
         </div>
         <button
           onClick={onLogout}
-          className="px-3 py-1 bg-gray-300 text-black text-sm rounded hover:bg-gray-400 transition"
+          className="px-3 py-1 bg-gray-400 text-black text-sm rounded hover:bg-gray-500 transition"
         >
           로그아웃
         </button>
       </div>
 
-      {/* 비밀번호 변경 모달 */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={closeModal}>
-          <div className="bg-white rounded-xl shadow-xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-bold text-black mb-4">비밀번호 변경</h2>
-            {pwSuccess ? (
-              <p className="text-green-600 text-center font-semibold py-4">✅ 비밀번호가 변경되었습니다!</p>
-            ) : (
-              <form onSubmit={handlePasswordChange} className="flex flex-col gap-3">
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">현재 비밀번호</label>
-                  <input
-                    type="password"
-                    value={currentPw}
-                    onChange={(e) => setCurrentPw(e.target.value)}
-                    placeholder="현재 비밀번호"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    maxLength={30}
-                    autoFocus
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">새 비밀번호</label>
-                  <input
-                    type="password"
-                    value={newPw}
-                    onChange={(e) => setNewPw(e.target.value)}
-                    placeholder="새 비밀번호"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    maxLength={30}
-                  />
-                </div>
-                <div>
-                  <label className="text-sm text-gray-600 mb-1 block">새 비밀번호 확인</label>
-                  <input
-                    type="password"
-                    value={confirmPw}
-                    onChange={(e) => setConfirmPw(e.target.value)}
-                    placeholder="새 비밀번호 재입력"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
-                    maxLength={30}
-                  />
-                </div>
-                {pwError && <p className="text-xs text-red-500">{pwError}</p>}
-                <div className="flex gap-2 mt-1">
+      {/* 프로필 설정 모달 */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeModal}>
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+            {/* 모달 헤더 */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+              <h2 className="text-lg font-bold text-black">프로필 설정</h2>
+              <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+            </div>
+
+            {/* 탭 */}
+            <div className="flex border-b border-gray-200 px-5">
+              {(['avatar', 'nickname', 'password'] as const).map((tab) => {
+                const labels = { avatar: '아바타', nickname: '닉네임', password: '비밀번호' };
+                return (
                   <button
-                    type="button"
-                    onClick={closeModal}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm"
+                    key={tab}
+                    onClick={() => setProfileTab(tab)}
+                    className={`flex-1 py-2 text-sm font-semibold transition-colors ${
+                      profileTab === tab
+                        ? 'border-b-2 border-brand-500 text-brand-600'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
                   >
-                    취소
+                    {labels[tab]}
                   </button>
+                );
+              })}
+            </div>
+
+            <div className="p-5">
+              {/* 아바타 탭 */}
+              {profileTab === 'avatar' && (
+                <div>
+                  <p className="text-sm text-gray-500 mb-3">사용할 아바타 이모지를 선택하세요</p>
+                  <div className="flex justify-center mb-4">
+                    <div className="w-16 h-16 rounded-full bg-brand-100 flex items-center justify-center text-3xl border-2 border-brand-300">
+                      {selectedAvatar || currentUser.nickname[0].toUpperCase()}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-6 gap-2 mb-4">
+                    <button
+                      onClick={() => setSelectedAvatar('')}
+                      className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold transition ${
+                        selectedAvatar === ''
+                          ? 'bg-brand-500 text-white ring-2 ring-brand-400'
+                          : 'bg-brand-100 text-brand-700 hover:bg-brand-200'
+                      }`}
+                    >
+                      {currentUser.nickname[0].toUpperCase()}
+                    </button>
+                    {AVATAR_EMOJIS.map((emoji) => (
+                      <button
+                        key={emoji}
+                        onClick={() => setSelectedAvatar(emoji)}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center text-xl transition ${
+                          selectedAvatar === emoji
+                            ? 'bg-brand-100 ring-2 ring-brand-400 scale-110'
+                            : 'hover:bg-gray-100'
+                        }`}
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
                   <button
-                    type="submit"
-                    disabled={pwLoading}
-                    className="flex-1 px-4 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60"
+                    onClick={handleAvatarSave}
+                    className="w-full py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition"
                   >
-                    {pwLoading ? '변경 중...' : '변경하기'}
+                    저장
                   </button>
                 </div>
-              </form>
-            )}
+              )}
+
+              {/* 닉네임 변경 탭 */}
+              {profileTab === 'nickname' && (
+                <form onSubmit={handleNicknameChange} className="flex flex-col gap-3">
+                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg text-xs text-yellow-700">
+                    ⚠️ 닉네임을 변경하면 새 계정으로 전환됩니다. 친구들이 새 닉네임으로 다시 추가해야 해요.
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">새 닉네임</label>
+                    <input
+                      type="text"
+                      value={newNickname}
+                      onChange={(e) => setNewNickname(e.target.value)}
+                      placeholder="새 닉네임 입력"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      maxLength={20}
+                      autoFocus
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm text-gray-600 mb-1 block">현재 비밀번호 (본인 확인)</label>
+                    <input
+                      type="password"
+                      value={newNicknamePw}
+                      onChange={(e) => setNewNicknamePw(e.target.value)}
+                      placeholder="현재 비밀번호"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                      maxLength={30}
+                    />
+                  </div>
+                  {nicknameError && <p className="text-xs text-red-500">{nicknameError}</p>}
+                  <div className="flex gap-2">
+                    <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm">취소</button>
+                    <button type="submit" disabled={nicknameLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60">
+                      {nicknameLoading ? '변경 중...' : '변경하기'}
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* 비밀번호 변경 탭 */}
+              {profileTab === 'password' && (
+                pwSuccess ? (
+                  <p className="text-green-600 text-center font-semibold py-6">✅ 비밀번호가 변경되었습니다!</p>
+                ) : (
+                  <form onSubmit={handlePasswordChange} className="flex flex-col gap-3">
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">현재 비밀번호</label>
+                      <input
+                        type="password"
+                        value={currentPw}
+                        onChange={(e) => setCurrentPw(e.target.value)}
+                        placeholder="현재 비밀번호"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        maxLength={30}
+                        autoFocus
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">새 비밀번호</label>
+                      <input
+                        type="password"
+                        value={newPw}
+                        onChange={(e) => setNewPw(e.target.value)}
+                        placeholder="새 비밀번호"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        maxLength={30}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-sm text-gray-600 mb-1 block">새 비밀번호 확인</label>
+                      <input
+                        type="password"
+                        value={confirmPw}
+                        onChange={(e) => setConfirmPw(e.target.value)}
+                        placeholder="새 비밀번호 재입력"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-brand-400"
+                        maxLength={30}
+                      />
+                    </div>
+                    {pwError && <p className="text-xs text-red-500">{pwError}</p>}
+                    <div className="flex gap-2 mt-1">
+                      <button type="button" onClick={closeModal} className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm">취소</button>
+                      <button type="submit" disabled={pwLoading} className="flex-1 py-2 bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition text-sm font-semibold disabled:opacity-60">
+                        {pwLoading ? '변경 중...' : '변경하기'}
+                      </button>
+                    </div>
+                  </form>
+                )
+              )}
+            </div>
           </div>
         </div>
       )}

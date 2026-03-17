@@ -27,6 +27,7 @@ interface User {
   id: number;
   nickname: string;
   location?: string;
+  avatar?: string;
 }
 
 /**
@@ -396,8 +397,16 @@ export default function Home() {
     const updatedUser = { ...currentUser, location: location.trim() || undefined };
     setCurrentUser(updatedUser);
     localStorage.setItem('currentUser', JSON.stringify(updatedUser));
-    // 서버 + 로컬에 저장
     await saveUser(updatedUser.id, updatedUser);
+  };
+
+  /**
+   * 프로필(아바타/닉네임) 업데이트
+   */
+  const handleUpdateProfile = (updatedUser: User) => {
+    setCurrentUser(updatedUser);
+    localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+    saveUser(updatedUser.id, updatedUser);
   };
 
   /**
@@ -462,7 +471,10 @@ export default function Home() {
         {/* 헤더 */}
         <header className="mb-8">
           <div className="flex flex-col items-center sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
-            <div className="flex items-center gap-6">
+            <div
+              className="flex items-center gap-6 cursor-pointer"
+              onClick={() => { if (currentUser) setActiveTab('my'); }}
+            >
               <img 
                 src="/WHENMEET_logo_new_clean.png" 
                 alt="언제만나 로고" 
@@ -486,6 +498,7 @@ export default function Home() {
                 currentUser={currentUser}
                 onLogin={handleLogin}
                 onLogout={handleLogout}
+                onUpdateProfile={handleUpdateProfile}
               />
             </div>
           </div>
@@ -586,7 +599,7 @@ export default function Home() {
                   />
                   {/* 거주지 설정 */}
                   <div className="mt-6 p-4 bg-brand-50 border border-brand-200 rounded-lg">
-                    <h3 className="text-base font-bold text-brand-700 mb-1">📍 거주지 설정 <span className="text-xs font-normal text-gray-400">(선택)</span></h3>
+                    <h3 className="text-base font-bold text-brand-700 mb-1">거주지 설정 <span className="text-xs font-normal text-gray-400">(선택)</span></h3>
                     <p className="text-xs text-gray-500 mb-3">입력하면 친구들과 중간 지점 지하철역을 추천해드려요</p>
                     <LocationEditor
                       currentLocation={currentUser.location}
@@ -655,7 +668,7 @@ export default function Home() {
                                   <div>
                                     <p className="font-medium text-black">{friend.nickname}</p>
                                     {friend.location && (
-                                      <p className="text-xs text-gray-400">📍 {friend.location}</p>
+                                      <p className="text-xs text-gray-400">{friend.location}</p>
                                     )}
                                   </div>
                                 </div>
@@ -760,7 +773,7 @@ export default function Home() {
                           {subwayRecommendations.length === 0 && (
                             <div className="mt-6 p-4 bg-yellow-50 border-l-4 border-yellow-500 rounded">
                               <h3 className="text-lg font-bold text-black mb-2">
-                                📍 거주지 정보가 필요해요
+                                거주지 정보가 필요해요
                               </h3>
                               <p className="text-sm text-gray-700">
                                 {!currentUser?.location && '회원님의 거주지 정보가 없습니다. '}
