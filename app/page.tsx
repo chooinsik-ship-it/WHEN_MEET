@@ -507,16 +507,7 @@ export default function Home() {
               />
             </div>
           </div>
-          {currentUser ? (
-            <div className="hidden sm:block text-center space-y-2">
-              <p className="text-lg text-black">
-                <span className="font-bold text-brand-600">{currentUser.nickname}</span>님, 환영해요! 👋
-              </p>
-              <p className="text-sm text-gray-600">
-                <span className="font-semibold text-black">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold text-black">자동 추천</span>해드려요.
-              </p>
-            </div>
-          ) : (
+          {!currentUser && (
             <div className="text-center space-y-1">
               <p className="text-black">
                 <span className="font-semibold">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold">자동 추천</span>해드려요.
@@ -607,8 +598,8 @@ export default function Home() {
             {/* 탭 설명 */}
             <div className="mb-4 p-3 bg-gray-50 rounded-lg">
               <p className="text-sm text-gray-700">
-                {activeTab === 'my' && '📋 내가 바쁜 시간을 먼저 표시해요'}
-                {activeTab === 'compare' && '🔍 겹치는 여유 시간을 자동 추천해요'}
+                {activeTab === 'my' && '📋 드래그로 나의 일정을 표시하면, 친구와 겹치는 시간을 자동 추천해드려요.'}
+                {activeTab === 'compare' && '🔍 친구와 겹치는 여유 시간을 자동 추천해요'}
                 {activeTab === 'group' && '👥 그룹/친구를 추가하고 관리해요'}
               </p>
             </div>
