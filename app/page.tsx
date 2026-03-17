@@ -1980,7 +1980,7 @@ export default function Home() {
                       <button
                         onClick={() => handleResendInvite(cancelAppt)}
                         className="text-xs bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold px-3 py-1 rounded-full transition cursor-pointer"
-                      >📨 초대 다시 보내기</button>
+                      >📨 수락 요청 다시 보내기</button>
                     </div>
                   ) : null;
                 })()}
