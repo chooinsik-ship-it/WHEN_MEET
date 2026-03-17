@@ -1710,15 +1710,15 @@ export default function Home() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <p className="font-bold text-black text-sm">🔔 알림</p>
                 <div className="flex items-center gap-2">
-                  {notifications.some(n => !n.read) && (
+                  {notifications.length > 0 && (
                     <button
                       onClick={() => {
                         if (!currentUser) return;
-                        markNotificationsRead(currentUser.id);
-                        setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+                        localStorage.setItem(`notifications_${currentUser.id}`, JSON.stringify([]));
+                        setNotifications([]);
                       }}
                       className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer"
-                    >모두 읽음</button>
+                    >모두 삭제</button>
                   )}
                   <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
@@ -1800,8 +1800,6 @@ export default function Home() {
             onClick={() => {
               setShowNotifications(!showNotifications);
               if (!showNotifications && currentUser) {
-                markNotificationsRead(currentUser.id);
-                setNotifications(prev => prev.map(n => ({ ...n, read: true })));
                 // localStorage에서 약속 상태 재동기화 (다른 사용자 수락 시 confirmed 반영)
                 const saved = localStorage.getItem(`appointments_${currentUser.id}`);
                 if (saved) setAppointments(JSON.parse(saved));
