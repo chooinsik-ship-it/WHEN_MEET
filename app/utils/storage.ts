@@ -289,6 +289,7 @@ export interface Appointment {
   acceptedBy?: string[]; // 수락한 참여자 목록
   createdAt: string;
   status?: 'pending' | 'confirmed'; // 전원 수락 시 confirmed
+  place?: string; // 약속 장소 (선택)
 }
 
 /**

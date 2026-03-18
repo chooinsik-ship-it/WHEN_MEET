@@ -61,6 +61,7 @@ export default function GroupScheduleModal({
   const [subwayRecommendations, setSubwayRecommendations] = useState<ReturnType<typeof recommendSubwayStations>>([]);
   const [missingLocations, setMissingLocations] = useState<string[]>([]);
   const [apptName, setApptName] = useState('');
+  const [apptPlace, setApptPlace] = useState('');
   const [apptDay, setApptDay] = useState(0);
   const [apptStart, setApptStart] = useState(14);
   const [apptEnd, setApptEnd] = useState(16);
@@ -330,6 +331,7 @@ export default function GroupScheduleModal({
                         <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>
                           {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
                         </p>
+                        {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>📍 {appt.place}</p>}
                         <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-200'}`}>{appt.participants.join(', ')}</p>
                       </div>
                     );
@@ -350,6 +352,14 @@ export default function GroupScheduleModal({
                       className="w-full px-3 py-2 border border-blue-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                       maxLength={30}
                     />
+                    <input
+                      type="text"
+                      value={apptPlace}
+                      onChange={(e) => setApptPlace(e.target.value)}
+                      placeholder="📍 장소 (선택, 예: 강남역 스타벅스)"
+                      className="w-full px-3 py-2 border border-blue-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={50}
+                    />
                     <div className="flex flex-wrap items-center gap-2 text-sm">
                       <select value={apptDay} onChange={(e) => setApptDay(Number(e.target.value))} className="px-2 py-1.5 border border-blue-200 rounded-lg text-black focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
                         {['월요일','화요일','수요일','목요일','금요일','토요일','일요일'].map((d,i) => <option key={i} value={i}>{d}</option>)}
@@ -365,8 +375,9 @@ export default function GroupScheduleModal({
                     <button
                       onClick={() => {
                         if (apptStart >= apptEnd) { alert('종료 시간은 시작 시간보다 늦어야 합니다.'); return; }
-                        onAddAppointment({ name: apptName.trim() || '약속', day: apptDay, startHour: apptStart, endHour: apptEnd });
+                        onAddAppointment({ name: apptName.trim() || '약속', place: apptPlace.trim() || undefined, day: apptDay, startHour: apptStart, endHour: apptEnd });
                         setApptName('');
+                        setApptPlace('');
                       }}
                       className="w-full py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition cursor-pointer text-sm"
                     >

@@ -97,6 +97,7 @@ export default function Home() {
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   // 새 약속 입력 폼
   const [newApptName, setNewApptName] = useState('');
+  const [newApptPlace, setNewApptPlace] = useState('');
   const [newApptDay, setNewApptDay] = useState(0);
   const [newApptStart, setNewApptStart] = useState(14);
   const [newApptEnd, setNewApptEnd] = useState(16);
@@ -119,7 +120,7 @@ export default function Home() {
   // 약속 취소 확인 모달
   const [cancelAppt, setCancelAppt] = useState<Appointment | null>(null);
   // 약속 수정 모드 (모달 내 인라인)
-  const [editAppt, setEditAppt] = useState<{ name: string; day: number; startHour: number; endHour: number; participants: string[] } | null>(null);
+  const [editAppt, setEditAppt] = useState<{ name: string; place?: string; day: number; startHour: number; endHour: number; participants: string[] } | null>(null);
   // 수정 모달 내 새 참여자 입력
   const [newParticipantInput, setNewParticipantInput] = useState('');
 
@@ -135,6 +136,7 @@ export default function Home() {
   // 그룹 약속 확정 폼 (어떤 그룹에 약속을 잡고 있는지)
   const [groupApptTarget, setGroupApptTarget] = useState<Group | null>(null);
   const [groupApptName, setGroupApptName] = useState('');
+  const [groupApptPlace, setGroupApptPlace] = useState('');
   const [groupApptDay, setGroupApptDay] = useState(0);
   const [groupApptStart, setGroupApptStart] = useState(14);
   const [groupApptEnd, setGroupApptEnd] = useState(16);
@@ -712,6 +714,7 @@ export default function Home() {
     const appt: Appointment = {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: newApptName.trim() || '약속',
+      place: newApptPlace.trim() || undefined,
       day: newApptDay,
       startHour: newApptStart,
       endHour: newApptEnd,
@@ -737,6 +740,7 @@ export default function Home() {
     });
 
     setNewApptName('');
+    setNewApptPlace('');
   };
 
   /**
@@ -842,6 +846,7 @@ export default function Home() {
     const appt: Appointment = {
       id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
       name: groupApptName.trim() || '약속',
+      place: groupApptPlace.trim() || undefined,
       day: groupApptDay,
       startHour: groupApptStart,
       endHour: groupApptEnd,
@@ -862,6 +867,7 @@ export default function Home() {
       });
     });
     setGroupApptName('');
+    setGroupApptPlace('');
     setGroupApptTarget(null);
   };
 
@@ -1546,6 +1552,14 @@ export default function Home() {
                                 className="w-full px-3 py-2 border border-blue-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
                                 maxLength={30}
                               />
+                              <input
+                                type="text"
+                                value={newApptPlace}
+                                onChange={(e) => setNewApptPlace(e.target.value)}
+                                placeholder="📍 장소 (선택, 예: 강남역 스타벅스)"
+                                className="w-full px-3 py-2 border border-blue-200 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                                maxLength={50}
+                              />
                               <div className="flex flex-wrap items-center gap-2 text-sm">
                                 <select
                                   value={newApptDay}
@@ -1608,6 +1622,7 @@ export default function Home() {
                                   <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>
                                     {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
                                   </p>
+                                  {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>📍 {appt.place}</p>}
                                   <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-200'}`}>{appt.participants.join(', ')}</p>
                                 </div>
                               );
@@ -1900,6 +1915,17 @@ export default function Home() {
                     />
                   </div>
                   <div>
+                    <label className="text-xs font-semibold text-gray-500 mb-1 block">장소 (선택)</label>
+                    <input
+                      type="text"
+                      value={editAppt.place ?? ''}
+                      onChange={(e) => setEditAppt(prev => prev && ({ ...prev, place: e.target.value }))}
+                      placeholder="예: 강남역 스타벅스"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-black text-sm focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      maxLength={50}
+                    />
+                  </div>
+                  <div>
                     <label className="text-xs font-semibold text-gray-500 mb-1 block">요일</label>
                     <select
                       value={editAppt.day}
@@ -2009,7 +2035,10 @@ export default function Home() {
                   <span className="font-semibold">{['월','화','수','목','금','토','일'][cancelAppt.day]}요일</span>{' '}
                   {String(cancelAppt.startHour).padStart(2,'0')}:00 ~ {String(cancelAppt.endHour).padStart(2,'0')}:00
                 </p>
-                <p className="text-sm font-bold text-blue-600 mb-2">&ldquo;{cancelAppt.name}&rdquo;</p>
+                <p className="text-sm font-bold text-blue-600 mb-1">&ldquo;{cancelAppt.name}&rdquo;</p>
+                {cancelAppt.place && (
+                  <p className="text-sm text-gray-700 mb-2">📍 <span className="font-semibold">{cancelAppt.place}</span></p>
+                )}
                 {cancelAppt.status === 'pending' && (() => {
                   const accepted = cancelAppt.acceptedBy ?? [];
                   const pending = cancelAppt.participants.filter(p => !accepted.includes(p));
@@ -2029,7 +2058,7 @@ export default function Home() {
                     className="flex-1 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition text-sm cursor-pointer"
                   >유지하기</button>
                   <button
-                    onClick={() => setEditAppt({ name: cancelAppt.name, day: cancelAppt.day, startHour: cancelAppt.startHour, endHour: cancelAppt.endHour, participants: [...cancelAppt.participants] })}
+                    onClick={() => setEditAppt({ name: cancelAppt.name, place: cancelAppt.place, day: cancelAppt.day, startHour: cancelAppt.startHour, endHour: cancelAppt.endHour, participants: [...cancelAppt.participants] })}
                     className="flex-1 py-2 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition text-sm cursor-pointer"
                   >수정하기</button>
                   <button
@@ -2055,12 +2084,13 @@ export default function Home() {
             appt.participants.includes(currentUser?.nickname ?? '') &&
             selectedGroup.members.every(m => appt.participants.includes(m))
           )}
-          onAddAppointment={({ name, day, startHour, endHour }) => {
+          onAddAppointment={({ name, place, day, startHour, endHour }) => {
             if (!currentUser || !selectedGroup) return;
             if (startHour >= endHour) { alert('종료 시간은 시작 시간보다 늦어야 합니다.'); return; }
             const appt: Appointment = {
               id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
               name: name || '약속',
+              place,
               day, startHour, endHour,
               participants: [currentUser.nickname, ...selectedGroup.members.filter(m => m !== currentUser.nickname)],
               acceptedBy: [currentUser.nickname],
