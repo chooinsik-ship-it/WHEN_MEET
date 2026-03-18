@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import TimeGrid from './components/TimeGrid';
 import OverlapGrid from './components/OverlapGrid';
@@ -976,6 +976,25 @@ export default function Home() {
       saveSchedule(currentUser.id, mySchedule);
     }
   }, [mySchedule, currentUser, isLoadingSchedule]);
+
+  /**
+   * 알림 실시간 폴링 (20초마다 새 알림 체크)
+   */
+  const notificationsRef = useRef<AppNotification[]>(notifications);
+  notificationsRef.current = notifications;
+  useEffect(() => {
+    if (!currentUser) return;
+    const interval = setInterval(() => {
+      const latest = loadNotifications(currentUser.id);
+      const current = notificationsRef.current;
+      // 새로 추가된 알림만 감지
+      const newItems = latest.filter(n => !current.some(c => c.id === n.id));
+      if (newItems.length > 0) {
+        setNotifications(latest);
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [currentUser]);
 
   // 비교 선택된 친구들
   const selectedFriends = friends.filter(f => selectedFriendIds.includes(f.id));
