@@ -1,12 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import TimeGrid from './components/TimeGrid';
 import OverlapGrid from './components/OverlapGrid';
 import SimpleLogin from './components/SimpleLogin';
 import GroupScheduleModal from './components/GroupScheduleModal';
 import GroupInvitationModal from './components/GroupInvitationModal';
 import LocationEditor from './components/LocationEditor';
+const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
 import { addressToCoordinate, recommendSubwayStations } from './utils/subway';
 import { 
@@ -984,32 +986,38 @@ export default function Home() {
     : '';
 
   // 지하철역 추천 계산
-  const subwayRecommendations = (() => {
+  const { subwayRecommendations, mapUserLocations } = (() => {
     if (selectedFriends.length === 0 || !currentUser?.location) {
-      return [];
+      return { subwayRecommendations: [], mapUserLocations: [] };
     }
-    
-    const locations = [];
-    
+
+    const locations: { lat: number; lng: number }[] = [];
+    const userLocs: { lat: number; lng: number; label: string }[] = [];
+
     const myCoord = addressToCoordinate(currentUser.location);
     if (myCoord) {
       locations.push(myCoord);
+      userLocs.push({ ...myCoord, label: currentUser.nickname + ' (나)' });
     }
-    
+
     selectedFriends.forEach(friend => {
       if (friend.location) {
         const coord = addressToCoordinate(friend.location);
         if (coord) {
           locations.push(coord);
+          userLocs.push({ ...coord, label: friend.nickname });
         }
       }
     });
-    
+
     if (locations.length < 2) {
-      return [];
+      return { subwayRecommendations: [], mapUserLocations: userLocs };
     }
-    
-    return recommendSubwayStations(locations, 5);
+
+    return {
+      subwayRecommendations: recommendSubwayStations(locations, 5),
+      mapUserLocations: userLocs,
+    };
   })();
 
   return (
@@ -1442,41 +1450,40 @@ export default function Home() {
                               <h3 className="text-lg font-bold text-black mb-3">
                                 🚇 중간 지점 지하철역 추천
                               </h3>
-                              <div className="space-y-2">
+                              {/* 카카오맵 지도 */}
+                              <KakaoMap
+                                userLocations={mapUserLocations}
+                                stations={subwayRecommendations.map((s, i) => ({ lat: s.lat, lng: s.lng, name: s.name, rank: i + 1 }))}
+                              />
+                              <div className="space-y-2 mt-3">
                                 {subwayRecommendations.map((station, idx) => (
-                                  <a
+                                  <div
                                     key={idx}
-                                    href={`https://map.naver.com/p/search/${encodeURIComponent(station.name + ' 맛집')}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md hover:bg-green-50 transition flex-wrap cursor-pointer"
+                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md hover:bg-green-50 transition flex-wrap"
                                   >
                                     <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
+                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold flex-shrink-0">
                                         {idx + 1}
                                       </div>
                                       <div>
-                                        <p className="font-bold text-black">
-                                          {station.name}
-                                        </p>
-                                        <p className="text-sm text-gray-600">
-                                          {station.line}
-                                        </p>
+                                        <p className="font-bold text-black">{station.name}</p>
+                                        <p className="text-sm text-gray-600">{station.line}</p>
                                       </div>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-sm text-gray-600">
-                                          평균 거리
-                                        </p>
-                                        <p className="font-semibold text-green-600">
-                                          {station.avgDistance.toFixed(1)}km
-                                        </p>
-                                      </div>
-                                  </a>
+                                    <div className="flex items-center gap-2">
+                                      <p className="text-sm font-semibold text-green-600">{station.avgDistance.toFixed(1)}km</p>
+                                      <a
+                                        href={`https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="text-xs bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold px-2.5 py-1 rounded-full transition"
+                                      >카카오맵 🗺️</a>
+                                    </div>
+                                  </div>
                                 ))}
                               </div>
                               <p className="text-xs text-gray-500 mt-3">
-                                💡 모든 멤버의 거주지를 고려한 중간 지점입니다
+                                💡 모든 멤버의 거주지를 고려한 중간 지점입니다. 핀을 클릭하면 이름을 확인할 수 있어요.
                               </p>
                             </div>
                           )}
@@ -1637,7 +1644,7 @@ export default function Home() {
                         <textarea
                           value={memberNicknames}
                           onChange={(e) => setMemberNicknames(e.target.value)}
-                          placeholder="멤버 닉네임 (예: 민수, 밍숭)"
+                          placeholder="멤버 닉네임 (예: 민수, 밍숭, 갯밍숭달팽이)"
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none text-sm"
                           rows={2}
                         />
