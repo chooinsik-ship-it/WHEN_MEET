@@ -1459,26 +1459,39 @@ export default function Home() {
                                 {subwayRecommendations.map((station, idx) => (
                                   <div
                                     key={idx}
-                                    className="flex items-center justify-between gap-2 p-3 bg-white rounded-lg hover:shadow-md hover:bg-green-50 transition flex-wrap"
+                                    className="flex flex-col gap-2 p-3 bg-white rounded-lg hover:shadow-md transition"
                                   >
-                                    <div className="flex items-center gap-3">
-                                      <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold flex-shrink-0">
-                                        {idx + 1}
+                                    <div className="flex items-center justify-between gap-2 flex-wrap">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold flex-shrink-0">
+                                          {idx + 1}
+                                        </div>
+                                        <div>
+                                          <p className="font-bold text-black">{station.name}</p>
+                                          <p className="text-sm text-gray-600">{station.line} · 평균 {station.avgDistance.toFixed(1)}km</p>
+                                        </div>
                                       </div>
-                                      <div>
-                                        <p className="font-bold text-black">{station.name}</p>
-                                        <p className="text-sm text-gray-600">{station.line}</p>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                      <p className="text-sm font-semibold text-green-600">{station.avgDistance.toFixed(1)}km</p>
                                       <a
                                         href={`https://map.kakao.com/link/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-xs bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold px-2.5 py-1 rounded-full transition"
-                                      >카카오맵 🗺️</a>
+                                      >지도 보기 🗺️</a>
                                     </div>
+                                    {/* 멤버별 가는 법 */}
+                                    {mapUserLocations.length > 0 && (
+                                      <div className="flex flex-wrap gap-1.5 pl-11">
+                                        {mapUserLocations.map((loc, lIdx) => (
+                                          <a
+                                            key={lIdx}
+                                            href={`https://map.kakao.com/link/from/${encodeURIComponent(loc.label)},${loc.lat},${loc.lng}/to/${encodeURIComponent(station.name)},${station.lat},${station.lng}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="text-xs bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 px-2.5 py-1 rounded-full transition"
+                                          >🚇 {loc.label} 가는 법</a>
+                                        ))}
+                                      </div>
+                                    )}
                                   </div>
                                 ))}
                               </div>
