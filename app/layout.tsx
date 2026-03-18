@@ -37,7 +37,7 @@ export default function RootLayout({
         {children}
         <Script
           src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_JS_KEY}&libraries=services&autoload=false`}
-          strategy="beforeInteractive"
+          strategy="afterInteractive"
         />
       </body>
     </html>

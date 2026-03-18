@@ -31,7 +31,7 @@ export default function KakaoMap({ userLocations, stations }: KakaoMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (!mapRef.current || typeof window === 'undefined' || !window.kakao) return;
+    if (!mapRef.current || typeof window === 'undefined') return;
 
     const initMap = () => {
       const allPoints = [
@@ -93,7 +93,15 @@ export default function KakaoMap({ userLocations, stations }: KakaoMapProps) {
       }
     };
 
-    window.kakao.maps.load(initMap);
+    // kakao SDK가 아직 로드 안 됐을 수 있으므로 폴링
+    const tryInit = () => {
+      if (window.kakao && window.kakao.maps) {
+        window.kakao.maps.load(initMap);
+      } else {
+        setTimeout(tryInit, 200);
+      }
+    };
+    tryInit();
   }, [userLocations, stations]);
 
   return (

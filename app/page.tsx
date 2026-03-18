@@ -1613,17 +1613,17 @@ export default function Home() {
                                 <div
                                   key={appt.id}
                                   onClick={() => setCancelAppt(appt)}
-                                  className={`p-3 rounded-lg cursor-pointer transition hover:opacity-85 active:scale-[0.98] ${isPending ? 'bg-yellow-200 text-gray-800' : 'bg-blue-500 text-white'}`}
+                                  className={`p-3 rounded-lg cursor-pointer transition hover:opacity-85 active:scale-[0.98] ${isPending ? 'bg-yellow-200 text-gray-800' : 'bg-blue-200 text-blue-900'}`}
                                 >
                                   <div className="flex items-center gap-2">
                                     <p className="font-bold">{appt.name}</p>
                                     {isPending && <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-semibold">⏳ 수락 대기중</span>}
                                   </div>
-                                  <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>
+                                  <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>
                                     {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
                                   </p>
-                                  {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>📍 {appt.place}</p>}
-                                  <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-200'}`}>{appt.participants.join(', ')}</p>
+                                  {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>장소 : {appt.place}</p>}
+                                  <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-500'}`}>참여인원 : {appt.participants.join(', ')}</p>
                                 </div>
                               );
                             })}
@@ -2029,7 +2029,7 @@ export default function Home() {
               <>
                 <h2 className="text-lg font-bold text-black mb-2">📅 약속 관리</h2>
                 <p className="text-sm text-gray-700 mb-1">
-                  <span className="font-semibold">{cancelAppt.participants.join(', ')}</span>와의 약속입니다.
+                  참여인원 : <span className="font-semibold">{cancelAppt.participants.join(', ')}</span>
                 </p>
                 <p className="text-sm text-gray-700 mb-1">
                   <span className="font-semibold">{['월','화','수','목','금','토','일'][cancelAppt.day]}요일</span>{' '}
@@ -2037,7 +2037,7 @@ export default function Home() {
                 </p>
                 <p className="text-sm font-bold text-blue-600 mb-1">&ldquo;{cancelAppt.name}&rdquo;</p>
                 {cancelAppt.place && (
-                  <p className="text-sm text-gray-700 mb-2">📍 <span className="font-semibold">{cancelAppt.place}</span></p>
+                  <p className="text-sm text-gray-700 mb-2">장소 : <span className="font-semibold">{cancelAppt.place}</span></p>
                 )}
                 {cancelAppt.status === 'pending' && (() => {
                   const accepted = cancelAppt.acceptedBy ?? [];

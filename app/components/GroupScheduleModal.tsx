@@ -321,18 +321,18 @@ export default function GroupScheduleModal({
                         key={appt.id}
                         onClick={() => onAppointmentClick?.(appt)}
                         className={`p-3 rounded-lg cursor-pointer transition hover:opacity-85 ${
-                          isPending ? 'bg-yellow-200 text-gray-800' : 'bg-blue-500 text-white'
+                          isPending ? 'bg-yellow-200 text-gray-800' : 'bg-blue-200 text-blue-900'
                         }`}
                       >
                         <div className="flex items-center gap-2">
                           <p className="font-bold">{appt.name}</p>
                           {isPending && <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-semibold">⏳ 수락 대기중</span>}
                         </div>
-                        <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>
+                        <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>
                           {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
                         </p>
-                        {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-100'}`}>📍 {appt.place}</p>}
-                        <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-200'}`}>{appt.participants.join(', ')}</p>
+                        {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>장소 : {appt.place}</p>}
+                        <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-500'}`}>참여인원 : {appt.participants.join(', ')}</p>
                       </div>
                     );
                   })}
