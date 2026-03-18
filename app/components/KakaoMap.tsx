@@ -78,7 +78,7 @@ export default function KakaoMap({ userLocations, stations }: KakaoMapProps) {
           image: markerImage,
         });
         const infowindow = new window.kakao.maps.InfoWindow({
-          content: `<div style="padding:5px 8px;font-size:12px;white-space:nowrap;">${station.name}</div>`,
+          content: `<div style="padding:5px 8px;font-size:12px;white-space:nowrap;font-weight:bold;color:#000;">${station.name}</div>`,
         });
         window.kakao.maps.event.addListener(marker, 'click', () => {
           infowindow.open(map, marker);
