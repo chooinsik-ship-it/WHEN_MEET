@@ -2,9 +2,19 @@
 
 import { useEffect, useState } from 'react';
 import OverlapGrid from './OverlapGrid';
-import { loadSchedule, loadUser, Appointment } from '../utils/storage';
+import { loadSchedule, loadDateSchedule, loadUser, Appointment, DateScheduleMap } from '../utils/storage';
 import { generateRecommendation } from '../utils/recommendation';
 import { addressToCoordinate, recommendSubwayStations } from '../utils/subway';
+
+const DAY_LABELS = ['일', '월', '화', '수', '목', '금', '토'];
+
+function formatDateKey(year: number, month: number, day: number): string {
+  return `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+function getDaysInMonth(year: number, month: number): number {
+  return new Date(year, month + 1, 0).getDate();
+}
 
 interface GroupScheduleModalProps {
   isOpen: boolean;
@@ -57,7 +67,13 @@ export default function GroupScheduleModal({
   onGroupNameChange,
 }: GroupScheduleModalProps) {
   const [allSchedules, setAllSchedules] = useState<boolean[][][]>([]);
+  const [dateSchedules, setDateSchedules] = useState<DateScheduleMap[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  // 요일별/날짜별 비교 모드
+  const [compareMode, setCompareMode] = useState<'week' | 'date'>('week');
+  const today = new Date();
+  const [viewYear, setViewYear] = useState(today.getFullYear());
+  const [viewMonth, setViewMonth] = useState(today.getMonth());
   const [subwayRecommendations, setSubwayRecommendations] = useState<ReturnType<typeof recommendSubwayStations>>([]);
   const [missingLocations, setMissingLocations] = useState<string[]>([]);
   const [apptName, setApptName] = useState('');
@@ -86,12 +102,17 @@ export default function GroupScheduleModal({
     
     const allMembers = [creatorNickname, ...memberNicknames];
 
-    // 스케줄 + 거주지 동시 로드
-    const [schedules, userData] = await Promise.all([
+    // 스케줄 + 날짜별 일정 + 거주지 동시 로드
+    const [schedules, dateSchedulesLoaded, userData] = await Promise.all([
       Promise.all(allMembers.map(async (nickname) => {
         const id = nicknameToId(nickname);
         const schedule = await loadSchedule(id);
         return schedule || createEmptySchedule();
+      })),
+      Promise.all(allMembers.map(async (nickname) => {
+        const id = nicknameToId(nickname);
+        const dateSchedule = await loadDateSchedule(id);
+        return dateSchedule || {};
       })),
       Promise.all(allMembers.map(async (nickname) => {
         const id = nicknameToId(nickname);
@@ -101,6 +122,7 @@ export default function GroupScheduleModal({
     ]);
 
     setAllSchedules(schedules);
+    setDateSchedules(dateSchedulesLoaded);
 
     // 거주지 기반 지하철 추천
     const locations: Array<{ lat: number; lng: number }> = [];
@@ -134,6 +156,37 @@ export default function GroupScheduleModal({
   const allMemberNames = [creatorNickname, ...memberNicknames];
   const selectedMemberIdx = selectedMember ? allMemberNames.indexOf(selectedMember) : -1;
   const selectedMemberSchedule = selectedMemberIdx >= 0 ? allSchedules[selectedMemberIdx] : null;
+
+  // 날짜별 비교용 계산
+  const todayAtMidnight = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayKey = formatDateKey(today.getFullYear(), today.getMonth(), today.getDate());
+  const daysInMonth = getDaysInMonth(viewYear, viewMonth);
+  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
+  const dateCells: (number | null)[] = [
+    ...Array(firstDayOfWeek).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
+  ];
+
+  const busyMembersOnDate = (dateKey: string): string[] =>
+    allMemberNames.filter((_, idx) => dateSchedules[idx]?.[dateKey]);
+
+  const goPrevMonth = () => {
+    if (viewMonth === 0) { setViewYear(y => y - 1); setViewMonth(11); }
+    else setViewMonth(m => m - 1);
+  };
+  const goNextMonth = () => {
+    if (viewMonth === 11) { setViewYear(y => y + 1); setViewMonth(0); }
+    else setViewMonth(m => m + 1);
+  };
+
+  const freeDaysGroup = dateCells
+    .filter((d): d is number => d !== null)
+    .filter((d) => new Date(viewYear, viewMonth, d) >= todayAtMidnight)
+    .filter((d) => {
+      const dateKey = formatDateKey(viewYear, viewMonth, d);
+      const busy = busyMembersOnDate(dateKey);
+      return selectedMember ? !busy.includes(selectedMember) : busy.length === 0;
+    });
 
   return (
     <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -184,7 +237,7 @@ export default function GroupScheduleModal({
           </div>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center"
+            className="text-gray-500 hover:text-gray-700 text-2xl font-bold w-8 h-8 flex items-center justify-center cursor-pointer"
           >
             ✕
           </button>
@@ -236,30 +289,143 @@ export default function GroupScheduleModal({
                 )}
               </div>
 
+              {/* 요일별/날짜별 비교 모드 전환 */}
+              <div className="flex gap-2 mb-4">
+                <button
+                  onClick={() => setCompareMode('week')}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 cursor-pointer ${
+                    compareMode === 'week'
+                      ? 'bg-brand-500 text-white border-brand-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  요일별 비교
+                </button>
+                <button
+                  onClick={() => setCompareMode('date')}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 cursor-pointer ${
+                    compareMode === 'date'
+                      ? 'bg-brand-500 text-white border-brand-600'
+                      : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                  }`}
+                >
+                  날짜별 비교
+                </button>
+              </div>
+
               {/* 겹치는 스케줄 표시 */}
-              {selectedMember && selectedMemberSchedule ? (
-                <div>
-                  <h3 className="text-base font-semibold text-gray-700 mb-3">
-                    📅 <span className="text-brand-600 font-bold">{selectedMember}</span>의 시간표
-                  </h3>
+              {compareMode === 'week' ? (
+                selectedMember && selectedMemberSchedule ? (
+                  <div>
+                    <h3 className="text-base font-semibold text-gray-700 mb-3">
+                      📅 <span className="text-brand-600 font-bold">{selectedMember}</span>의 시간표
+                    </h3>
+                    <OverlapGrid
+                      schedule1={selectedMemberSchedule}
+                      schedule2={createEmptySchedule()}
+                      allSchedules={[selectedMemberSchedule]}
+                      participantNames={[selectedMember]}
+                    />
+                  </div>
+                ) : (
                   <OverlapGrid
-                    schedule1={selectedMemberSchedule}
-                    schedule2={createEmptySchedule()}
-                    allSchedules={[selectedMemberSchedule]}
-                    participantNames={[selectedMember]}
+                    schedule1={allSchedules[0] || createEmptySchedule()}
+                    schedule2={allSchedules[1] || createEmptySchedule()}
+                    allSchedules={allSchedules}
+                    participantNames={[creatorNickname, ...memberNicknames]}
                   />
-                </div>
+                )
               ) : (
-                <OverlapGrid
-                  schedule1={allSchedules[0] || createEmptySchedule()}
-                  schedule2={allSchedules[1] || createEmptySchedule()}
-                  allSchedules={allSchedules}
-                  participantNames={[creatorNickname, ...memberNicknames]}
-                />
+                <div className="max-w-md mx-auto">
+                  <div className="flex items-center justify-between mb-3">
+                    <button
+                      onClick={goPrevMonth}
+                      className="px-2 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer text-sm"
+                    >◀</button>
+                    <h3 className="text-base font-bold text-black">{viewYear}년 {viewMonth + 1}월</h3>
+                    <button
+                      onClick={goNextMonth}
+                      className="px-2 py-1 rounded-lg border border-gray-300 text-gray-600 hover:bg-gray-100 cursor-pointer text-sm"
+                    >▶</button>
+                  </div>
+                  <p className="text-xs text-gray-500 mb-2">
+                    {selectedMember
+                      ? <><span className="font-semibold text-brand-600">{selectedMember}</span>님의 날짜별 일정이에요.</>
+                      : '멤버 전원의 날짜별 일정을 겹쳐서 보여드려요. 바쁜 인원이 많을수록 진해집니다.'}
+                  </p>
+
+                  {/* 범례 (전체 멤버 보기일 때만) */}
+                  {!selectedMember && (
+                    <div className="mb-3 flex flex-wrap gap-x-3 gap-y-1.5 text-xs">
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3.5 h-3.5 flex-shrink-0 bg-white border border-gray-300 rounded"></div>
+                        <span className="text-black">모두 여유</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-100 border border-gray-300 rounded"></div>
+                        <span className="text-black">1명 바쁨</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-300 border border-gray-300 rounded"></div>
+                        <span className="text-black">2명 바쁨</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <div className="w-3.5 h-3.5 flex-shrink-0 bg-green-500 border border-gray-300 rounded"></div>
+                        <span className="text-black">3명 이상 바쁨</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-7 gap-0.5 mb-4">
+                    {DAY_LABELS.map((label, i) => (
+                      <div key={label} className={`text-center text-[10px] font-semibold py-1 ${i === 0 ? 'text-red-500' : i === 6 ? 'text-blue-500' : 'text-gray-600'}`}>
+                        {label}
+                      </div>
+                    ))}
+                    {dateCells.map((day, idx) => {
+                      if (day === null) return <div key={`empty-${idx}`} />;
+                      const dateKey = formatDateKey(viewYear, viewMonth, day);
+                      const busy = busyMembersOnDate(dateKey);
+                      const level = selectedMember ? (busy.includes(selectedMember) ? 1 : 0) : busy.length;
+                      const isToday = dateKey === todayKey;
+                      const dow = new Date(viewYear, viewMonth, day).getDay();
+
+                      let colorClass = 'bg-white';
+                      if (level === 1) colorClass = 'bg-green-100';
+                      else if (level === 2) colorClass = 'bg-green-300';
+                      else if (level >= 3) colorClass = 'bg-green-500 text-white';
+
+                      let textClass = level >= 3 ? '' : dow === 0 ? 'text-red-500' : dow === 6 ? 'text-blue-500' : 'text-gray-700';
+                      const ringClass = isToday ? 'ring-2 ring-brand-300' : '';
+
+                      const title = busy.length > 0 ? `${busy.join(', ')} 일정 있음` : '모두 여유';
+
+                      return (
+                        <div
+                          key={dateKey}
+                          title={title}
+                          className={`aspect-square rounded-md flex items-center justify-center text-xs font-semibold border border-gray-200 ${colorClass} ${textClass} ${ringClass}`}
+                        >
+                          {day}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div className="p-3 bg-brand-50 border-l-4 border-brand-300 rounded">
+                    <p className="text-xs font-semibold text-brand-700 mb-1">✨ 추천 여유일</p>
+                    {freeDaysGroup.length > 0 ? (
+                      <p className="text-xs text-gray-700">
+                        {freeDaysGroup.map((d) => `${d}일(${DAY_LABELS[new Date(viewYear, viewMonth, d).getDay()]})`).join(', ')}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-gray-500">이번 달에는 추천할 여유일이 없어요.</p>
+                    )}
+                  </div>
+                </div>
               )}
 
-              {/* 추천 문구 */}
-              {recommendation && (
+              {/* 추천 문구 (요일별 비교에서만 표시) */}
+              {compareMode === 'week' && recommendation && (
                 <div className="mt-6 p-4 bg-brand-50 border-l-4 border-brand-400 rounded">
                   <h3 className="text-lg font-bold text-black mb-2">
                     만남 추천
@@ -481,7 +647,7 @@ export default function GroupScheduleModal({
         <div className="flex-shrink-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end">
           <button
             onClick={onClose}
-            className="px-6 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition"
+            className="px-6 py-2 bg-gray-500 text-white font-semibold rounded-lg hover:bg-gray-600 transition cursor-pointer"
           >
             닫기
           </button>

@@ -214,17 +214,17 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
           {/* 모바일 편집 모드 토글 (스크롤 ↔ 그리기 전환) */}
           <button
             onClick={() => setEditMode(!editMode)}
-            className={`sm:hidden px-3 py-2 rounded-lg border text-sm font-semibold transition-all duration-200 ${
+            className={`sm:hidden px-3 py-2 rounded-lg border text-sm font-semibold transition-all duration-200 cursor-pointer ${
               editMode
                 ? 'bg-brand-500 text-white border-brand-600 shadow-md'
-                : 'bg-white text-gray-600 border-gray-300'
+                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
             }`}
           >
             {editMode ? '✏️ 편집중' : '✏️ 편집'}
           </button>
           <button
             onClick={clearAll}
-            className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200"
+            className="px-4 py-2 bg-white text-gray-600 border border-gray-300 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200 cursor-pointer"
           >
             초기화
           </button>

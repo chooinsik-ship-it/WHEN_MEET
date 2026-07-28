@@ -91,6 +91,80 @@ export async function loadSchedule(userId: number): Promise<boolean[][] | null> 
 }
 
 /**
+ * 날짜별 일정 (YYYY-MM-DD -> 그 날 일정 있음 여부)
+ */
+export type DateScheduleMap = Record<string, boolean>;
+
+const DATE_SCHEDULE_STORAGE_KEY_PREFIX = 'whenmeet_date_schedule_';
+
+/**
+ * 사용자 날짜별 일정 저장 (서버 + 로컬)
+ */
+export async function saveDateSchedule(userId: number, dateSchedule: DateScheduleMap): Promise<void> {
+  try {
+    const key = `${DATE_SCHEDULE_STORAGE_KEY_PREFIX}${userId}`;
+    const data = JSON.stringify(dateSchedule);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, data);
+    }
+
+    const response = await fetch(`/api/date-schedule/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ dateSchedule }),
+    });
+
+    if (!response.ok) {
+      console.error('날짜별 일정 서버 저장 실패, 로컬만 사용');
+    }
+  } catch (error) {
+    console.error('날짜별 일정 저장 실패:', error);
+  }
+}
+
+/**
+ * 사용자 날짜별 일정 불러오기 (서버 우선, 로컬 fallback)
+ */
+export async function loadDateSchedule(userId: number): Promise<DateScheduleMap | null> {
+  try {
+    const response = await fetch(`/api/date-schedule/${userId}`);
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.dateSchedule && typeof data.dateSchedule === 'object') {
+        if (typeof window !== 'undefined') {
+          const key = `${DATE_SCHEDULE_STORAGE_KEY_PREFIX}${userId}`;
+          localStorage.setItem(key, JSON.stringify(data.dateSchedule));
+        }
+        return data.dateSchedule as DateScheduleMap;
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      const key = `${DATE_SCHEDULE_STORAGE_KEY_PREFIX}${userId}`;
+      const localData = localStorage.getItem(key);
+      if (localData) {
+        return JSON.parse(localData) as DateScheduleMap;
+      }
+    }
+
+    return null;
+  } catch (error) {
+    console.error('날짜별 일정 불러오기 실패:', error);
+
+    if (typeof window !== 'undefined') {
+      const key = `${DATE_SCHEDULE_STORAGE_KEY_PREFIX}${userId}`;
+      const localData = localStorage.getItem(key);
+      if (localData) {
+        return JSON.parse(localData) as DateScheduleMap;
+      }
+    }
+
+    return null;
+  }
+}
+
+/**
  * 사용자 정보 저장 (서버 + 로컬)
  */
 export async function saveUser(userId: number, userData: object): Promise<void> {

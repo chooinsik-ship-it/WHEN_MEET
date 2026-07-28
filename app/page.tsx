@@ -7,6 +7,7 @@ import OverlapGrid from './components/OverlapGrid';
 import SimpleLogin from './components/SimpleLogin';
 import GroupScheduleModal from './components/GroupScheduleModal';
 import GroupInvitationModal from './components/GroupInvitationModal';
+import DateSchedule from './components/DateSchedule';
 import LocationEditor from './components/LocationEditor';
 const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
@@ -30,6 +31,9 @@ import {
   removeAppointmentForUser,
   updateAppointmentForUser,
   nicknameToId,
+  saveDateSchedule,
+  loadDateSchedule,
+  DateScheduleMap,
 } from './utils/storage';
 
 /**
@@ -49,6 +53,7 @@ interface Friend {
   id: number;
   nickname: string;
   schedule: boolean[][];
+  dateSchedule: DateScheduleMap;
   location?: string;
 }
 
@@ -78,7 +83,10 @@ export default function Home() {
   
   // 내 시간표
   const [mySchedule, setMySchedule] = useState<boolean[][]>(createEmptySchedule());
-  
+
+  // 날짜별 일정 (YYYY-MM-DD -> 24시간 배열)
+  const [dateSchedule, setDateSchedule] = useState<DateScheduleMap>({});
+
   // 스케줄 로딩 상태
   const [isLoadingSchedule, setIsLoadingSchedule] = useState(false);
   
@@ -90,6 +98,8 @@ export default function Home() {
   
   // 비교할 친구 선택 (ID 목록)
   const [selectedFriendIds, setSelectedFriendIds] = useState<number[]>([]);
+  // 친구 비교 탭 내부 모드: 요일별 vs 날짜별
+  const [compareMode, setCompareMode] = useState<'week' | 'date'>('week');
   // 친구 시간표 단독 보기 (ID, null 이면 전체 비교)
   const [viewFriendId, setViewFriendId] = useState<number | null>(null);
 
@@ -142,7 +152,7 @@ export default function Home() {
   const [groupApptEnd, setGroupApptEnd] = useState(16);
   
   // 현재 활성화된 탭
-  const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group'>('my');
+  const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group' | 'date'>('my');
 
   // 빠른 입력 취침 시간 (null = 없음, 0~23 = 해당 시각에 취침)
   const [sleepTime, setSleepTime] = useState<number | null>(null);
@@ -175,11 +185,13 @@ export default function Home() {
 
     // 시간표 로드
     const savedSchedule = await loadSchedule(user.id);
+    const savedDateSchedule = await loadDateSchedule(user.id);
 
     // 모든 데이터 준비 완료 후 state 일괄 설정 → useEffect가 올바른 시간표로 실행됨
     localStorage.setItem('currentUser', JSON.stringify(mergedUser));
     setCurrentUser(mergedUser);
     setMySchedule(savedSchedule ?? createEmptySchedule());
+    setDateSchedule(savedDateSchedule ?? {});
     setIsLoadingSchedule(false);
 
     // 저장된 친구 목록 불러오기 (닉네임 → 서버에서 시간표 재로드)
@@ -191,14 +203,16 @@ export default function Home() {
           const id = Math.abs(nickname.split('').reduce((acc: number, char: string) => {
             return ((acc << 5) - acc) + char.charCodeAt(0);
           }, 0));
-          const [schedule, userData] = await Promise.all([
+          const [schedule, dateSchedule, userData] = await Promise.all([
             loadSchedule(id).then((s) => s || createEmptySchedule()),
+            loadDateSchedule(id).then((s) => s || {}),
             loadUser(id),
           ]);
           return {
             id,
             nickname,
             schedule,
+            dateSchedule,
             location: userData?.location as string | undefined,
           };
         })
@@ -237,6 +251,7 @@ export default function Home() {
     setCurrentUser(null);
     localStorage.removeItem('currentUser');
     setMySchedule(createEmptySchedule());
+    setDateSchedule({});
     setFriends([]);
     setSelectedFriendIds([]);
     setGroups([]);
@@ -418,8 +433,9 @@ export default function Home() {
     }
 
     // 요청자의 스케줄 로드
-    const [fromSchedule, fromUserData] = await Promise.all([
+    const [fromSchedule, fromDateSchedule, fromUserData] = await Promise.all([
       loadSchedule(fromId).then(s => s || createEmptySchedule()),
+      loadDateSchedule(fromId).then(s => s || {}),
       loadUser(fromId),
     ]);
 
@@ -427,6 +443,7 @@ export default function Home() {
       id: fromId,
       nickname: fromNickname,
       schedule: fromSchedule,
+      dateSchedule: fromDateSchedule,
       location: fromUserData?.location as string | undefined,
     };
 
@@ -984,6 +1001,15 @@ export default function Home() {
   }, [mySchedule, currentUser, isLoadingSchedule]);
 
   /**
+   * 날짜별 일정 변경 시 자동 저장
+   */
+  useEffect(() => {
+    if (currentUser && !isLoadingSchedule) {
+      saveDateSchedule(currentUser.id, dateSchedule);
+    }
+  }, [dateSchedule, currentUser, isLoadingSchedule]);
+
+  /**
    * 알림 실시간 폴링 (20초마다 새 알림 체크)
    */
   const notificationsRef = useRef<AppNotification[]>(notifications);
@@ -1140,33 +1166,43 @@ export default function Home() {
             <div className="flex mb-6 border-b border-gray-300">
               <button
                 onClick={() => setActiveTab('my')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'my'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
                 내 시간표
               </button>
               <button
                 onClick={() => setActiveTab('compare')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'compare'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
                 친구들과 비교
               </button>
               <button
                 onClick={() => setActiveTab('group')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg ${
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'group'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
-                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100 cursor-pointer'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
                 그룹 관리
+              </button>
+              <button
+                onClick={() => setActiveTab('date')}
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                  activeTab === 'date'
+                    ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
+                }`}
+              >
+                날짜별 일정
               </button>
             </div>
 
@@ -1176,6 +1212,7 @@ export default function Home() {
                 {activeTab === 'my' && '📋 드래그로 나의 일정을 표시하면, 친구와 겹치는 시간을 자동 추천해드려요.'}
                 {activeTab === 'compare' && '🔍 친구와 겹치는 여유 시간을 자동 추천해요'}
                 {activeTab === 'group' && '👥 그룹/친구를 추가하고 관리해요'}
+                {activeTab === 'date' && '📅 캘린더에서 날짜를 선택하고 드래그로 그 날의 일정을 표시하세요.'}
               </p>
             </div>
 
@@ -1316,7 +1353,7 @@ export default function Home() {
                       />
                       <button
                         type="submit"
-                        className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition"
+                        className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition cursor-pointer"
                       >
                         친구 추가
                       </button>
@@ -1376,23 +1413,31 @@ export default function Home() {
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setSelectedFriendIds(prev =>
-                                        isSelected
-                                          ? prev.filter(id => id !== friend.id)
-                                          : [...prev, friend.id]
-                                      );
+                                      if (viewFriendId !== null) {
+                                        // 단독 시간표 보는 중 → 비교하기 클릭 시 전체 비교로 전환
+                                        setSelectedFriendIds(prev =>
+                                          prev.includes(friend.id) ? prev : [...prev, friend.id]
+                                        );
+                                        setViewFriendId(null);
+                                      } else {
+                                        setSelectedFriendIds(prev =>
+                                          isSelected
+                                            ? prev.filter(id => id !== friend.id)
+                                            : [...prev, friend.id]
+                                        );
+                                      }
                                     }}
-                                    className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 ${
+                                    className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 cursor-pointer ${
                                       isSelected
                                         ? 'bg-brand-500 text-white border-brand-600'
                                         : 'bg-white text-gray-600 border-gray-300 hover:border-brand-400 hover:text-brand-600'
                                     }`}
                                   >
-                                    {isSelected ? '✓ 비교중' : '비교 선택'}
+                                    {isSelected ? '✓ 비교중' : '비교하기'}
                                   </button>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setDeleteConfirmFriend(friend); }}
-                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors"
+                                    className="p-1.5 text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
                                     title="친구 삭제"
                                   >
                                     ✕
@@ -1403,6 +1448,32 @@ export default function Home() {
                           })}
                         </div>
                       </div>
+
+                      {/* 요일별/날짜별 비교 모드 전환 */}
+                      {viewFriendId === null && (
+                        <div className="flex gap-2 mb-4">
+                          <button
+                            onClick={() => setCompareMode('week')}
+                            className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 cursor-pointer ${
+                              compareMode === 'week'
+                                ? 'bg-brand-500 text-white border-brand-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                            }`}
+                          >
+                            요일별 비교
+                          </button>
+                          <button
+                            onClick={() => setCompareMode('date')}
+                            className={`px-3 py-1.5 text-sm font-semibold rounded-lg border transition-all duration-200 cursor-pointer ${
+                              compareMode === 'date'
+                                ? 'bg-brand-500 text-white border-brand-600'
+                                : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-100'
+                            }`}
+                          >
+                            날짜별 비교
+                          </button>
+                        </div>
+                      )}
 
                       {/* 비교 영역 */}
                       {viewFriendId !== null ? (
@@ -1438,6 +1509,19 @@ export default function Home() {
                             👆 비교할 친구를 선택하세요
                           </p>
                         </div>
+                      ) : compareMode === 'date' ? (
+                        <DateSchedule
+                          schedule={dateSchedule}
+                          onChange={setDateSchedule}
+                          friends={friends}
+                          selectedFriendIds={selectedFriendIds}
+                          onToggleFriend={(id) =>
+                            setSelectedFriendIds((prev) =>
+                              prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+                            )
+                          }
+                          showFriendPicker={false}
+                        />
                       ) : (
                         <>
                           <div className="mb-3 px-1">
@@ -1633,6 +1717,18 @@ export default function Home() {
                     </>
                   )}
                 </div>
+              ) : activeTab === 'date' ? (
+                <DateSchedule
+                  schedule={dateSchedule}
+                  onChange={setDateSchedule}
+                  friends={friends}
+                  selectedFriendIds={selectedFriendIds}
+                  onToggleFriend={(id) =>
+                    setSelectedFriendIds((prev) =>
+                      prev.includes(id) ? prev.filter((f) => f !== id) : [...prev, id]
+                    )
+                  }
+                />
               ) : (
                 <div>
                   {/* 그룹 생성 폼 */}
@@ -1691,7 +1787,7 @@ export default function Home() {
                         <textarea
                           value={memberNicknames}
                           onChange={(e) => setMemberNicknames(e.target.value)}
-                          placeholder="멤버 닉네임 (예: 민수, 밍숭, 갯밍숭달팽이)"
+                          placeholder="멤버 닉네임 (예: 미스터찜)"
                           className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-400 text-black resize-none text-sm"
                           rows={2}
                         />
@@ -1738,7 +1834,7 @@ export default function Home() {
                                 e.stopPropagation();
                                 setDeleteConfirmGroup(group);
                               }}
-                              className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition"
+                              className="px-3 py-1 text-sm text-red-500 hover:bg-red-50 rounded transition cursor-pointer"
                             >
                               {'그룹 나가기'}
                             </button>

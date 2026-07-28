@@ -85,13 +85,13 @@ export default function GroupInvitationModal({
         <div className="flex gap-3">
           <button
             onClick={() => onDecline(invitation)}
-            className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition"
+            className="flex-1 px-6 py-3 bg-gray-200 text-gray-700 font-semibold rounded-lg hover:bg-gray-300 transition cursor-pointer"
           >
             아니오
           </button>
           <button
             onClick={() => onAccept(invitation)}
-            className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition"
+            className="flex-1 px-6 py-3 bg-blue-500 text-white font-semibold rounded-lg hover:bg-blue-600 transition cursor-pointer"
           >
             예
           </button>

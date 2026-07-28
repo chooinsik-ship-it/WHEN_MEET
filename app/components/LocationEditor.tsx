@@ -24,7 +24,7 @@ export default function LocationEditor({ currentLocation, onSave }: LocationEdit
         </span>
         <button
           onClick={() => { setValue(currentLocation ?? ''); setEditing(true); }}
-          className="px-3 py-1 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition"
+          className="px-3 py-1 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition cursor-pointer"
         >
           {currentLocation ? '수정' : '입력하기'}
         </button>
@@ -47,13 +47,13 @@ export default function LocationEditor({ currentLocation, onSave }: LocationEdit
       <div className="flex gap-2">
         <button
           onClick={handleSave}
-          className="flex-1 sm:flex-none px-4 py-2 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition"
+          className="flex-1 sm:flex-none px-4 py-2 text-sm bg-brand-500 text-white rounded-lg hover:bg-brand-600 transition cursor-pointer"
         >
           저장
         </button>
         <button
           onClick={() => setEditing(false)}
-          className="flex-1 sm:flex-none px-3 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition"
+          className="flex-1 sm:flex-none px-3 py-2 text-sm bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition cursor-pointer"
         >
           취소
         </button>
