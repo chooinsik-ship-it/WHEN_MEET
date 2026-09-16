@@ -28,12 +28,13 @@ import {
 import type { GameRecord, GameStatus, PublicGame } from './types';
 
 export class GameError extends Error {
-  constructor(
-    public code: string,
-    message: string,
-    public status = 400
-  ) {
+  code: string;
+  status: number;
+
+  constructor(code: string, message: string, status = 400) {
     super(message);
+    this.code = code;
+    this.status = status;
   }
 }
 
