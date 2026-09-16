@@ -27,6 +27,7 @@ import {
   markNotificationsRead,
   removeNotification,
   saveNotification,
+  saveAllNotifications,
   saveAppointmentForUser,
   removeAppointmentForUser,
   updateAppointmentForUser,
@@ -95,6 +96,7 @@ export default function Home() {
   
   // 친구 닉네임 입력
   const [friendNickname, setFriendNickname] = useState('');
+  const [isSendingFriendRequest, setIsSendingFriendRequest] = useState(false);
   
   // 비교할 친구 선택 (ID 목록)
   const [selectedFriendIds, setSelectedFriendIds] = useState<number[]>([]);
@@ -233,11 +235,11 @@ export default function Home() {
     }
 
     // 알림 불러오기
-    const notifs = loadNotifications(user.id);
+    const notifs = await loadNotifications(user.id);
     setNotifications(notifs);
 
     // 대기 중인 그룹 초대 확인
-    const invitations = loadPendingInvitations(user.id);
+    const invitations = await loadPendingInvitations(user.id);
     if (invitations.length > 0) {
       setPendingInvitations(invitations);
       setCurrentInvitation(invitations[0]);
@@ -360,7 +362,10 @@ export default function Home() {
    */
   const handleAddFriend = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
+    // 연타로 같은 요청이 두 번 가는 것 방지
+    if (isSendingFriendRequest) return;
+
     if (!friendNickname.trim()) {
       alert('친구 닉네임을 입력해주세요.');
       return;
@@ -399,12 +404,20 @@ export default function Home() {
       return;
     }
 
-    // 상대방에게 친구 요청 알림 전송
-    saveNotification(friendNickname.trim(), {
+    // 상대방에게 친구 요청 알림 전송 — 서버 저장이 끝난 걸 확인하고 나서 성공 처리
+    setIsSendingFriendRequest(true);
+    const sent = await saveNotification(friendNickname.trim(), {
       type: 'friend_request',
       message: `👤 ${currentUser!.nickname}님이 친구 요청을 보냈습니다.`,
       fromNickname: currentUser!.nickname,
     });
+    setIsSendingFriendRequest(false);
+
+    if (!sent) {
+      // 실패했는데 발송 기록을 남기면 재시도가 막히므로 여기서 중단
+      alert('친구 요청 전송에 실패했습니다. 잠시 후 다시 시도해주세요.');
+      return;
+    }
 
     // 발송 목록에 기록
     sentList.push(friendNickname.trim());
@@ -1010,22 +1023,59 @@ export default function Home() {
   }, [dateSchedule, currentUser, isLoadingSchedule]);
 
   /**
-   * 알림 실시간 폴링 (20초마다 새 알림 체크)
+   * 알림 + 그룹 초대 실시간 폴링 (10초마다 새 알림/초대 체크)
+   * 탭이 다시 보이거나 창이 포커스될 때도 즉시 한 번 확인한다.
    */
   const notificationsRef = useRef<AppNotification[]>(notifications);
   notificationsRef.current = notifications;
+  const pendingInvitationsRef = useRef<GroupInvitation[]>(pendingInvitations);
+  pendingInvitationsRef.current = pendingInvitations;
+  const currentInvitationRef = useRef<GroupInvitation | null>(currentInvitation);
+  currentInvitationRef.current = currentInvitation;
   useEffect(() => {
     if (!currentUser) return;
-    const interval = setInterval(() => {
-      const latest = loadNotifications(currentUser.id);
-      const current = notificationsRef.current;
+
+    const checkForUpdates = async () => {
+      const [latestNotifs, latestInvitations] = await Promise.all([
+        loadNotifications(currentUser.id),
+        loadPendingInvitations(currentUser.id),
+      ]);
+
       // 새로 추가된 알림만 감지
-      const newItems = latest.filter(n => !current.some(c => c.id === n.id));
-      if (newItems.length > 0) {
-        setNotifications(latest);
+      const currentNotifs = notificationsRef.current;
+      const newNotifItems = latestNotifs.filter(n => !currentNotifs.some(c => c.id === n.id));
+      if (newNotifItems.length > 0) {
+        setNotifications(latestNotifs);
       }
-    }, 20000);
-    return () => clearInterval(interval);
+
+      // 새로 추가된 그룹 초대 감지
+      const currentInvites = pendingInvitationsRef.current;
+      const newInviteItems = latestInvitations.filter(
+        inv => !currentInvites.some(c => c.groupId === inv.groupId)
+      );
+      if (newInviteItems.length > 0) {
+        setPendingInvitations(latestInvitations);
+        // 지금 보여주고 있는 초대 모달이 없으면 새 초대를 바로 표시
+        if (!currentInvitationRef.current) {
+          setCurrentInvitation(newInviteItems[0]);
+        }
+      }
+    };
+
+    const interval = setInterval(checkForUpdates, 10000);
+
+    // 백그라운드 탭에서는 타이머가 느려지므로, 돌아왔을 때 바로 확인
+    const handleVisible = () => {
+      if (document.visibilityState === 'visible') checkForUpdates();
+    };
+    document.addEventListener('visibilitychange', handleVisible);
+    window.addEventListener('focus', checkForUpdates);
+
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisible);
+      window.removeEventListener('focus', checkForUpdates);
+    };
   }, [currentUser]);
 
   // 비교 선택된 친구들
@@ -1353,9 +1403,10 @@ export default function Home() {
                       />
                       <button
                         type="submit"
-                        className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition cursor-pointer"
+                        disabled={isSendingFriendRequest}
+                        className="px-6 py-2 bg-brand-500 text-white font-semibold rounded-lg hover:bg-brand-600 transition cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        친구 추가
+                        {isSendingFriendRequest ? '전송 중…' : '친구 추가'}
                       </button>
                     </form>
                   </div>
@@ -1885,7 +1936,7 @@ export default function Home() {
                         if (!currentUser) return;
                         const actionTypes = ['friend_request', 'appointment_invite'];
                         const kept = notifications.filter(n => actionTypes.includes(n.type));
-                        localStorage.setItem(`notifications_${currentUser.id}`, JSON.stringify(kept));
+                        saveAllNotifications(currentUser.id, kept);
                         setNotifications(kept);
                       }}
                       className="text-xs text-blue-500 hover:text-blue-700 cursor-pointer"

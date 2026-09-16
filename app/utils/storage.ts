@@ -273,54 +273,66 @@ export function nicknameToId(nickname: string): number {
   return Math.abs(hash);
 }
 
+const GROUP_INVITATIONS_KEY_PREFIX = 'group_invitations_';
+
 /**
- * 특정 사용자에게 그룹 초대 저장
- * @param userNickname 초대받을 사용자 닉네임
- * @param invitation 그룹 초대 정보
+ * 사용자의 대기 중인 그룹 초대 목록 불러오기 (서버 우선, 로컬 fallback)
+ * @param userId 사용자 ID
+ * @returns 초대 목록
  */
-export function saveGroupInvitation(userNickname: string, invitation: GroupInvitation): void {
+export async function loadPendingInvitations(userId: number): Promise<GroupInvitation[]> {
+  const key = `${GROUP_INVITATIONS_KEY_PREFIX}${userId}`;
   try {
-    const userId = nicknameToId(userNickname);
-    const key = `group_invitations_${userId}`;
-    
-    if (typeof window !== 'undefined') {
-      const existingInvitations = localStorage.getItem(key);
-      const invitations: GroupInvitation[] = existingInvitations 
-        ? JSON.parse(existingInvitations) 
-        : [];
-      
-      // 동일한 그룹 초대가 이미 있는지 확인
-      const exists = invitations.some(inv => inv.groupId === invitation.groupId);
-      if (!exists) {
-        invitations.push(invitation);
-        localStorage.setItem(key, JSON.stringify(invitations));
+    const response = await fetch(`/api/group-invitations/${userId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data.invitations)) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(key, JSON.stringify(data.invitations));
+        }
+        return data.invitations as GroupInvitation[];
       }
     }
+  } catch (error) {
+    console.error('그룹 초대 불러오기 실패:', error);
+  }
+
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(key);
+    if (local) return JSON.parse(local) as GroupInvitation[];
+  }
+  return [];
+}
+
+/**
+ * 사용자의 그룹 초대 목록 전체 저장 (서버 + 로컬)
+ */
+async function saveAllGroupInvitations(userId: number, invitations: GroupInvitation[]): Promise<void> {
+  try {
+    const key = `${GROUP_INVITATIONS_KEY_PREFIX}${userId}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(invitations));
+    }
+    await fetch(`/api/group-invitations/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invitations }),
+    });
   } catch (error) {
     console.error('그룹 초대 저장 실패:', error);
   }
 }
 
 /**
- * 사용자의 대기 중인 그룹 초대 목록 불러오기
- * @param userId 사용자 ID
- * @returns 초대 목록
+ * 특정 사용자에게 그룹 초대 저장
+ * @param userNickname 초대받을 사용자 닉네임
+ * @param invitation 그룹 초대 정보
  */
-export function loadPendingInvitations(userId: number): GroupInvitation[] {
-  try {
-    if (typeof window !== 'undefined') {
-      const key = `group_invitations_${userId}`;
-      const data = localStorage.getItem(key);
-      
-      if (data) {
-        return JSON.parse(data) as GroupInvitation[];
-      }
-    }
-    return [];
-  } catch (error) {
-    console.error('그룹 초대 불러오기 실패:', error);
-    return [];
-  }
+export async function saveGroupInvitation(userNickname: string, invitation: GroupInvitation): Promise<void> {
+  const userId = nicknameToId(userNickname);
+  const existing = await loadPendingInvitations(userId);
+  if (existing.some(inv => inv.groupId === invitation.groupId)) return;
+  await saveAllGroupInvitations(userId, [...existing, invitation]);
 }
 
 /**
@@ -328,26 +340,9 @@ export function loadPendingInvitations(userId: number): GroupInvitation[] {
  * @param userId 사용자 ID
  * @param groupId 그룹 ID
  */
-export function removeGroupInvitation(userId: number, groupId: string): void {
-  try {
-    if (typeof window !== 'undefined') {
-      const key = `group_invitations_${userId}`;
-      const data = localStorage.getItem(key);
-      
-      if (data) {
-        const invitations: GroupInvitation[] = JSON.parse(data);
-        const filtered = invitations.filter(inv => inv.groupId !== groupId);
-        
-        if (filtered.length > 0) {
-          localStorage.setItem(key, JSON.stringify(filtered));
-        } else {
-          localStorage.removeItem(key);
-        }
-      }
-    }
-  } catch (error) {
-    console.error('그룹 초대 삭제 실패:', error);
-  }
+export async function removeGroupInvitation(userId: number, groupId: string): Promise<void> {
+  const existing = await loadPendingInvitations(userId);
+  await saveAllGroupInvitations(userId, existing.filter(inv => inv.groupId !== groupId));
 }
 
 /**
@@ -380,68 +375,108 @@ export interface AppNotification {
   read: boolean;
 }
 
+const NOTIFICATIONS_KEY_PREFIX = 'notifications_';
+
 /**
- * 특정 사용자에게 알림 저장
+ * 사용자 알림 목록 불러오기 (서버 우선, 로컬 fallback)
  */
-export function saveNotification(userNickname: string, notification: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): void {
+export async function loadNotifications(userId: number): Promise<AppNotification[]> {
+  const key = `${NOTIFICATIONS_KEY_PREFIX}${userId}`;
   try {
-    const userId = nicknameToId(userNickname);
-    const key = `notifications_${userId}`;
-    if (typeof window !== 'undefined') {
-      const existing: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
-      existing.unshift({
-        ...notification,
-        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        read: false,
-        createdAt: new Date().toISOString(),
-      });
-      localStorage.setItem(key, JSON.stringify(existing));
+    const response = await fetch(`/api/notifications/${userId}`);
+    if (response.ok) {
+      const data = await response.json();
+      if (Array.isArray(data.notifications)) {
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(key, JSON.stringify(data.notifications));
+        }
+        return data.notifications as AppNotification[];
+      }
     }
+  } catch (error) {
+    console.error('알림 불러오기 실패:', error);
+  }
+
+  if (typeof window !== 'undefined') {
+    const local = localStorage.getItem(key);
+    if (local) return JSON.parse(local) as AppNotification[];
+  }
+  return [];
+}
+
+/**
+ * 사용자 알림 목록 전체 저장 (서버 + 로컬)
+ */
+export async function saveAllNotifications(userId: number, notifications: AppNotification[]): Promise<void> {
+  try {
+    const key = `${NOTIFICATIONS_KEY_PREFIX}${userId}`;
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(key, JSON.stringify(notifications));
+    }
+    await fetch(`/api/notifications/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notifications }),
+    });
   } catch (error) {
     console.error('알림 저장 실패:', error);
   }
 }
 
 /**
- * 사용자 알림 목록 불러오기
+ * 특정 사용자에게 알림 1건 전송
+ * 서버에서 기존 목록에 덧붙이므로, 상대가 그 사이 받은 알림을 덮어쓰지 않는다.
+ * @returns 서버 저장 성공 여부 (호출한 쪽에서 성공/실패를 구분해야 할 때 사용)
  */
-export function loadNotifications(userId: number): AppNotification[] {
+export async function saveNotification(userNickname: string, notification: Omit<AppNotification, 'id' | 'read' | 'createdAt'>): Promise<boolean> {
+  const userId = nicknameToId(userNickname);
+  const newNotification: AppNotification = {
+    ...notification,
+    id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    read: false,
+    createdAt: new Date().toISOString(),
+  };
+
   try {
-    if (typeof window !== 'undefined') {
-      const data = localStorage.getItem(`notifications_${userId}`);
-      return data ? (JSON.parse(data) as AppNotification[]) : [];
+    const response = await fetch(`/api/notifications/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ notification: newNotification }),
+    });
+
+    if (!response.ok) {
+      console.error('알림 전송 실패:', response.status);
+      return false;
     }
-    return [];
-  } catch {
-    return [];
+
+    // 같은 브라우저에서 수신자로 로그인하는 경우를 위한 로컬 캐시 갱신
+    if (typeof window !== 'undefined') {
+      const key = `${NOTIFICATIONS_KEY_PREFIX}${userId}`;
+      const local: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
+      localStorage.setItem(key, JSON.stringify([newNotification, ...local]));
+    }
+
+    return true;
+  } catch (error) {
+    console.error('알림 전송 실패:', error);
+    return false;
   }
 }
 
 /**
  * 알림 읽음 처리
  */
-export function markNotificationsRead(userId: number): void {
-  try {
-    if (typeof window !== 'undefined') {
-      const key = `notifications_${userId}`;
-      const data: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
-      const updated = data.map(n => ({ ...n, read: true }));
-      localStorage.setItem(key, JSON.stringify(updated));
-    }
-  } catch { /* noop */ }
+export async function markNotificationsRead(userId: number): Promise<void> {
+  const existing = await loadNotifications(userId);
+  await saveAllNotifications(userId, existing.map(n => ({ ...n, read: true })));
 }
 
 /**
  * 알림 단건 삭제
  */
-export function removeNotification(userId: number, notificationId: string): void {
-  try {
-    if (typeof window !== 'undefined') {
-      const key = `notifications_${userId}`;
-      const data: AppNotification[] = JSON.parse(localStorage.getItem(key) || '[]');
-      localStorage.setItem(key, JSON.stringify(data.filter(n => n.id !== notificationId)));
-    }
-  } catch { /* noop */ }
+export async function removeNotification(userId: number, notificationId: string): Promise<void> {
+  const existing = await loadNotifications(userId);
+  await saveAllNotifications(userId, existing.filter(n => n.id !== notificationId));
 }
 
 /**
