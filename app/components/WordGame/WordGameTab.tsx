@@ -86,6 +86,16 @@ export default function WordGameTab() {
     setNotice(e instanceof Error ? e.message : '요청에 실패했습니다.');
   }, []);
 
+  /**
+   * 입력은 ref 를 원본으로 둔다.
+   * 키를 누른 직후(같은 프레임에) 제출해도 state 반영을 기다리지 않고 최신 입력이 전송된다.
+   */
+  const inputRef = useRef<string[]>([]);
+  const applyInput = useCallback((next: string[]) => {
+    inputRef.current = next;
+    setInput(next);
+  }, []);
+
   const startGame = useCallback(async () => {
     setBusy(true);
     setNotice(null);
@@ -94,16 +104,17 @@ export default function WordGameTab() {
       const res = await gameApi.start();
       setRule(res.rule);
       setGame(res.game);
-      setInput([]);
+      applyInput([]);
     } catch (e) {
       handleError(e);
     } finally {
       setBusy(false);
     }
-  }, [handleError]);
+  }, [handleError, applyInput]);
 
   const submit = useCallback(async () => {
     if (!game || !playing || busy) return;
+    const input = inputRef.current;
 
     if (input.length !== jamoCount) {
       setNotice(`자모 ${jamoCount}칸을 모두 채워주세요. (시도 횟수는 차감되지 않아요)`);
@@ -123,13 +134,13 @@ export default function WordGameTab() {
 
       const res = await gameApi.guess(game.gameId, input, requestId);
       setGame(res.game);
-      setInput([]);
+      applyInput([]);
     } catch (e) {
       handleError(e);
     } finally {
       setBusy(false);
     }
-  }, [game, playing, busy, input, jamoCount, handleError]);
+  }, [game, playing, busy, jamoCount, handleError, applyInput]);
 
   const abandon = useCallback(async () => {
     if (!game || !playing || busy) return;
@@ -137,13 +148,13 @@ export default function WordGameTab() {
     try {
       const res = await gameApi.abandon(game.gameId);
       setGame(res.game);
-      setInput([]);
+      applyInput([]);
     } catch (e) {
       handleError(e);
     } finally {
       setBusy(false);
     }
-  }, [game, playing, busy, handleError]);
+  }, [game, playing, busy, handleError, applyInput]);
 
   /* ------------------------------------------------------------ 입력 */
 
@@ -151,20 +162,21 @@ export default function WordGameTab() {
     (jamo: string) => {
       if (!playing || busy) return;
       setNotice(null);
-      setInput((prev) => (prev.length >= jamoCount ? prev : [...prev, jamo]));
+      if (inputRef.current.length >= jamoCount) return;
+      applyInput([...inputRef.current, jamo]);
     },
-    [playing, busy, jamoCount]
+    [playing, busy, jamoCount, applyInput]
   );
 
   const backspace = useCallback(() => {
     if (!playing || busy) return;
-    setInput((prev) => prev.slice(0, -1));
-  }, [playing, busy]);
+    applyInput(inputRef.current.slice(0, -1));
+  }, [playing, busy, applyInput]);
 
   const clearInput = useCallback(() => {
     if (!playing || busy) return;
-    setInput([]);
-  }, [playing, busy]);
+    applyInput([]);
+  }, [playing, busy, applyInput]);
 
   // PC 키보드
   const submitRef = useRef(submit);
