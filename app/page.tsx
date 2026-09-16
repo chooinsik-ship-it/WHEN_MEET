@@ -8,6 +8,7 @@ import SimpleLogin from './components/SimpleLogin';
 import GroupScheduleModal from './components/GroupScheduleModal';
 import GroupInvitationModal from './components/GroupInvitationModal';
 import DateSchedule from './components/DateSchedule';
+import WordGameTab from './components/WordGame/WordGameTab';
 import LocationEditor from './components/LocationEditor';
 const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
@@ -154,7 +155,7 @@ export default function Home() {
   const [groupApptEnd, setGroupApptEnd] = useState(16);
   
   // 현재 활성화된 탭
-  const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group' | 'date'>('my');
+  const [activeTab, setActiveTab] = useState<'my' | 'compare' | 'group' | 'date' | 'game'>('my');
 
   // 빠른 입력 취침 시간 (null = 없음, 0~23 = 해당 시각에 취침)
   const [sleepTime, setSleepTime] = useState<number | null>(null);
@@ -1254,6 +1255,16 @@ export default function Home() {
               >
                 날짜별 일정
               </button>
+              <button
+                onClick={() => setActiveTab('game')}
+                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                  activeTab === 'game'
+                    ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
+                    : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
+                }`}
+              >
+                단어 게임
+              </button>
             </div>
 
             {/* 탭 설명 */}
@@ -1263,6 +1274,7 @@ export default function Home() {
                 {activeTab === 'compare' && '🔍 친구와 겹치는 여유 시간을 자동 추천해요'}
                 {activeTab === 'group' && '👥 그룹/친구를 추가하고 관리해요'}
                 {activeTab === 'date' && '📅 캘린더에서 날짜를 선택하고 드래그로 그 날의 일정을 표시하세요.'}
+                {activeTab === 'game' && '🎮 한글 자모를 추리해 단어를 맞혀보세요. 기록은 랭킹에 집계돼요.'}
               </p>
             </div>
 
@@ -1780,6 +1792,8 @@ export default function Home() {
                     )
                   }
                 />
+              ) : activeTab === 'game' ? (
+                <WordGameTab />
               ) : (
                 <div>
                   {/* 그룹 생성 폼 */}

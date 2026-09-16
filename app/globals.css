@@ -37,3 +37,12 @@ body {
   overflow-y: scroll; /* 스크롤바 공간 항상 확보 → 탭 전환 시 레이아웃 밀림 방지 */
   overflow-x: hidden; /* 수평 오버플로우 차단 */
 }
+
+/* 단어 게임: 잘못된 입력 피드백 */
+@keyframes wordgame-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}

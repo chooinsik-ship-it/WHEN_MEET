@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
+import { attachSessionCookie, createSessionToken } from '../../../lib/wordgame/session';
 
 const isKvConfigured = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
 
 function hashPassword(password: string): string {
   return crypto.createHash('sha256').update('whenmeet_salt_' + password).digest('hex');
+}
+
+/**
+ * 로그인 성공 응답에 서명된 세션 쿠키를 심는다.
+ * 단어 게임 API는 요청 본문의 userId 대신 이 쿠키만 신뢰한다.
+ */
+async function withSession(response: NextResponse, userId: number): Promise<NextResponse> {
+  if (!Number.isFinite(userId)) return response;
+  try {
+    return attachSessionCookie(response, await createSessionToken(userId));
+  } catch (error) {
+    // 세션 발급 실패가 기존 로그인 자체를 막지는 않도록 한다
+    console.error('[auth API] session issue failed:', error);
+    return response;
+  }
 }
 
 /**
@@ -37,12 +53,12 @@ export async function POST(
     if (!storedHash) {
       // 처음 사용 → 비밀번호 등록
       await kv.set(passwordKey, inputHash);
-      return NextResponse.json({ success: true, isNew: true });
+      return withSession(NextResponse.json({ success: true, isNew: true }), Number(userId));
     }
 
     // 비밀번호 검증
     if (storedHash === inputHash) {
-      return NextResponse.json({ success: true, isNew: false });
+      return withSession(NextResponse.json({ success: true, isNew: false }), Number(userId));
     }
 
     return NextResponse.json({ success: false, error: '비밀번호가 틀렸습니다.' }, { status: 401 });
