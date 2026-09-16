@@ -374,3 +374,21 @@ test('자모 입력으로 사전 단어를 찾는다', async () => {
   assert.equal(findByJamo(sample.jamo)?.word, sample.word);
   assert.equal(findByJamo(['ㅎ', 'ㅎ', 'ㅎ', 'ㅎ', 'ㅎ']), undefined, '사전에 없는 입력');
 });
+
+test('입력 허용 사전은 정답 후보를 포함하는 더 넓은 집합이다', async () => {
+  const { allEntries, allowedCount, entryCount, findByJamo } =
+    await import('../app/lib/wordgame/dictionary.ts');
+
+  assert.ok(allowedCount() > entryCount(), '허용 단어가 정답 후보보다 많아야 한다');
+
+  // 정답 후보는 모두 입력으로도 허용돼야 한다
+  for (const entry of allEntries()) {
+    assert.ok(findByJamo(entry.jamo), `${entry.word} 가 입력 허용 목록에 없음`);
+  }
+});
+
+test('정답으로는 안 나오지만 사전에 있는 단어도 입력할 수 있다', async () => {
+  const { findByJamo } = await import('../app/lib/wordgame/dictionary.ts');
+  // 실제 단어인데 빈도가 낮아 정답 후보에는 들어가지 않는 예
+  assert.ok(findByJamo(decomposeJamo('인수')), '인수 는 입력 가능해야 한다');
+});

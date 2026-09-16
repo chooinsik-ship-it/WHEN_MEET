@@ -4,56 +4,14 @@
  * ⚠️ 이 모듈은 API 라우트에서만 import 한다.
  *    클라이언트 컴포넌트에서 import 하면 정답 목록이 번들에 포함되어 게임이 무의미해진다.
  *
- * ⚠️ 아래 WORDS 는 **샘플 사전**이다. (직접 선별한 일상 명사 목록)
- *    운영용 사전이 아니며, 국립국어원 표준국어대사전 등 라이선스를 확인한 출처의
- *    단어 목록으로 교체해야 한다. 교체 방법은 README_WORDGAME.md 참고.
+ * 단어 데이터는 `words.data.ts` (자동 생성). 출처·재생성 방법은 README_WORDGAME.md 참고.
+ *  - ANSWER_WORDS  : 출제되는 정답 후보 (비교적 자주 쓰이는 단어)
+ *  - ALLOWED_WORDS : 입력이 허용되는 단어 (사전에 있는 한글 단어 전체)
  */
 import { createHash } from 'crypto';
 import { decomposeJamo } from '../hangul';
 import { JAMO_COUNT } from './config';
-
-/**
- * 샘플 사전 — 자모 분해 길이와 무관하게 후보를 모아두고,
- * 규칙(JAMO_COUNT)에 맞는 단어만 런타임에 추려 쓴다.
- */
-const WORDS: string[] = [
-  '가구', '가방', '가슴', '가위', '가을', '가지', '간식', '감자', '강아지', '거울',
-  '거리', '건물', '겨울', '결혼', '경기', '계단', '고기', '고민', '고양이', '고추',
-  '곰탕', '공기', '공부', '공원', '공장', '과일', '과자', '관심', '교실', '구름',
-  '구두', '국수', '군대', '궁금', '귀신', '그림', '그늘', '극장', '근처', '금요일',
-  '기름', '기분', '기차', '기타', '김치', '까치', '꼬리', '꽃잎', '나무', '나비',
-  '나이', '낚시', '날씨', '남산', '남자', '냄비', '냄새', '노래', '노을', '녹차',
-  '논밭', '놀이', '농구', '누나', '눈물', '느낌', '다리', '다방', '단추', '달력',
-  '담요', '대문', '대학', '도로', '도시', '도장', '독서', '동네', '동생', '돼지',
-  '두부', '뒷산', '등산', '딸기', '땅콩', '라면', '마늘', '마당', '마음', '마차',
-  '만두', '말씀', '매실', '머리', '먼지', '메모', '명절', '모기', '모래', '모자',
-  '목요일', '목소리', '몸살', '무지개', '문제', '물감', '물고기', '미소', '미술', '바구니',
-  '바나나', '바다', '바람', '바지', '박수', '반지', '발톱', '밤하늘', '방법', '배구',
-  '배꼽', '배추', '백지', '버섯', '버스', '벌레', '범위', '벚꽃', '베개', '벼락',
-  '변화', '별명', '병원', '보리', '보물', '복숭아', '볶음밥', '봄비', '부엌', '부자',
-  '북극', '분수', '불빛', '비누', '비디오', '비빔밥', '빗물', '빨래', '사과', '사람',
-  '사진', '사탕', '산책', '살구', '삼촌', '상자', '새벽', '색깔', '생각', '생선',
-  '서울', '선물', '선생', '설탕', '성격', '세수', '소금', '소나기', '소리', '소설',
-  '손가락', '손님', '수건', '수박', '수업', '수저', '숙제', '순서', '술집', '숫자',
-  '스승', '시간', '시계', '시골', '시장', '식구', '식탁', '신문', '신발', '실수',
-  '심장', '쌀밥', '아기', '아들', '아빠', '아침', '안개', '안경', '알람', '앞치마',
-  '야구', '약국', '양말', '양파', '어깨', '어제', '얼굴', '얼음', '엄마', '여름',
-  '여자', '여행', '연기', '연필', '열쇠', '엽서', '영어', '영화', '예술', '오늘',
-  '오리', '오빠', '오이', '옥수수', '온도', '올챙이', '옷장', '완두', '왕자', '외투',
-  '요리', '욕심', '용기', '우산', '우유', '운동', '원숭이', '유리', '유행', '은행',
-  '음악', '의자', '이름', '이불', '이야기', '인생', '일기', '입술', '자두', '자연',
-  '자전거', '잔디', '잠자리', '장갑', '재미', '저녁', '전화', '절약', '정답', '제비',
-  '조개', '조카', '종이', '주말', '주방', '주스', '죽순', '지갑', '지도', '지붕',
-  '지하철', '진달래', '질문', '찌개', '차례', '참새', '창문', '채소', '책상', '천사',
-  '철학', '청소', '체육', '초록', '촛불', '추억', '축구', '출발', '충전', '취미',
-  '치과', '친구', '칠판', '침대', '칫솔', '카메라', '칼국수', '커피', '컴퓨터', '코끼리',
-  '콩나물', '크기', '키위', '타조', '탁구', '태양', '택시', '터널', '토끼', '토마토',
-  '통장', '파도', '파랑', '파티', '팔찌', '팥죽', '편지', '평화', '포도', '표정',
-  '풍선', '프로', '피부', '피자', '하늘', '하루', '학교', '한글', '할머니', '항구',
-  '해물', '햇살', '행복', '향기', '허리', '헬멧', '형제', '호두', '호박', '호수',
-  '혼자', '화분', '화요일', '환경', '황소', '회사', '휴가', '휴지', '흐름', '흑백',
-  '희망', '힘줄',
-];
+import { ALLOWED_WORDS, ANSWER_WORDS } from './words.data';
 
 export interface DictionaryEntry {
   wordId: string;
@@ -71,11 +29,11 @@ export function wordIdFor(word: string): string {
   return 'w' + createHash('sha1').update(word, 'utf8').digest('hex').slice(0, 12);
 }
 
-function buildEntries(jamoCount: number): DictionaryEntry[] {
+function buildEntries(words: readonly string[], jamoCount: number): DictionaryEntry[] {
   const seen = new Set<string>();
   const entries: DictionaryEntry[] = [];
 
-  for (const word of WORDS) {
+  for (const word of words) {
     if (seen.has(word)) continue;
     seen.add(word);
 
@@ -88,22 +46,33 @@ function buildEntries(jamoCount: number): DictionaryEntry[] {
   return entries;
 }
 
-/** 현재 규칙(자모 칸 수)에 맞는 단어들 */
-const ENTRIES = buildEntries(JAMO_COUNT);
-const BY_ID = new Map(ENTRIES.map((e) => [e.wordId, e]));
+/** 현재 규칙에 맞는 정답 후보 */
+const ANSWER_ENTRIES = buildEntries(ANSWER_WORDS, JAMO_COUNT);
+
+/** 현재 규칙에 맞는 입력 허용 단어 (정답 후보를 포함하는 상위 집합) */
+const ALLOWED_ENTRIES = buildEntries([...ALLOWED_WORDS, ...ANSWER_WORDS], JAMO_COUNT);
+
+const BY_ID = new Map(ALLOWED_ENTRIES.map((e) => [e.wordId, e]));
+
 const BY_JAMO_KEY = new Map<string, DictionaryEntry>();
-for (const entry of ENTRIES) {
-  // 자모 분해가 같은 단어가 여럿이면 먼저 등록된 단어를 대표로 둔다 (입력 검증용)
+for (const entry of ALLOWED_ENTRIES) {
+  // 자모 분해가 같은 단어가 여럿이면 먼저 등록된 단어를 대표로 둔다 (표시용)
   if (!BY_JAMO_KEY.has(entry.jamoKey)) BY_JAMO_KEY.set(entry.jamoKey, entry);
 }
 
 /** 정답 후보 전체 (서버 전용) */
 export function allEntries(): DictionaryEntry[] {
-  return ENTRIES;
+  return ANSWER_ENTRIES;
 }
 
+/** 정답 후보 수 */
 export function entryCount(): number {
-  return ENTRIES.length;
+  return ANSWER_ENTRIES.length;
+}
+
+/** 입력 허용 단어 수 */
+export function allowedCount(): number {
+  return ALLOWED_ENTRIES.length;
 }
 
 export function getEntryById(wordId: string): DictionaryEntry | undefined {
