@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSelf, requireSession, sessionNickname } from '../../../lib/apiAuth';
 
 const isKvConfigured =
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
@@ -11,6 +12,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
+  // 알림은 본인 것만 조회 가능
+  const { userId: targetId } = await params;
+  const session = await requireSelf(request, targetId);
+  if (!session.ok) return session.response;
+
   if (!isKvConfigured) {
     return NextResponse.json({ notifications: [] });
   }
@@ -37,6 +43,16 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId: targetId } = await params;
+  const body = await request.json();
+
+  // 단건 추가는 "남에게 보내는" 동작이므로 로그인만 확인하고,
+  // 목록 전체 저장(읽음 처리·삭제)은 본인만 할 수 있다.
+  const session = body?.notification
+    ? await requireSession(request)
+    : await requireSelf(request, targetId);
+  if (!session.ok) return session.response;
+
   if (!isKvConfigured) {
     return NextResponse.json({ success: true });
   }
@@ -44,10 +60,15 @@ export async function POST(
   try {
     const { kv } = await import('@vercel/kv');
     const { userId } = await params;
-    const { notification, notifications } = await request.json();
+    const { notification, notifications } = body;
     const key = `notifications:${userId}`;
 
     if (notification) {
+      // 발신자 위조 방지: 표시되는 보낸 사람을 서버가 세션 기준으로 덮어쓴다
+      const realNickname = await sessionNickname(session.userId);
+      if (realNickname && notification.fromNickname) {
+        notification.fromNickname = realNickname;
+      }
       const existing = (await kv.get<{ id: string }[]>(key)) ?? [];
       // 재전송으로 같은 알림이 두 번 쌓이지 않도록
       if (!existing.some(n => n.id === notification.id)) {

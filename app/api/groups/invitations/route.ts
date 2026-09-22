@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { requireSession } from '../../../lib/apiAuth';
 
 // Upstash Redis KV 클라이언트
 let kv: any = null;
@@ -19,7 +20,10 @@ async function getKVClient() {
 /**
  * GET /api/groups/invitations - 내 초대 목록 조회
  */
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
+  const session = await requireSession(request);
+  if (!session.ok) return session.response;
+
   try {
     const { searchParams } = new URL(request.url);
     const nickname = searchParams.get('nickname');

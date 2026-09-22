@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server';
+import { requireSession } from '../../../lib/apiAuth';
 
 // Upstash Redis KV 클라이언트
 let kv: any = null;
@@ -19,7 +20,10 @@ async function getKVClient() {
 /**
  * POST /api/groups/join - 그룹 참여
  */
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const session = await requireSession(request);
+  if (!session.ok) return session.response;
+
   try {
     const body = await request.json();
     const { groupId, nickname, accept } = body;

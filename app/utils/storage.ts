@@ -5,6 +5,26 @@
 const STORAGE_KEY_PREFIX = 'whenmeet_schedule_';
 
 /**
+ * API 호출 공통 래퍼
+ * 세션이 만료(401)되면 한 번만 안내하고 로그인 화면으로 돌려보낸다.
+ * (예전 방식으로 로그인해 세션 쿠키가 없는 사용자도 여기서 걸린다)
+ */
+let sessionExpiredHandled = false;
+
+async function apiFetch(input: string, init?: RequestInit): Promise<Response> {
+  const response = await fetch(input, init);
+
+  if (response.status === 401 && typeof window !== 'undefined' && !sessionExpiredHandled) {
+    sessionExpiredHandled = true;
+    localStorage.removeItem('currentUser');
+    alert('로그인이 만료되었어요. 다시 로그인해주세요.');
+    window.location.reload();
+  }
+
+  return response;
+}
+
+/**
  * 사용자 시간표 저장 (서버 + 로컬)
  * @param userId 사용자 ID
  * @param schedule 시간표 데이터
@@ -19,7 +39,7 @@ export async function saveSchedule(userId: number, schedule: boolean[][]): Promi
     }
 
     // 서버에 저장
-    const response = await fetch(`/api/schedule/${userId}`, {
+    const response = await apiFetch(`/api/schedule/${userId}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -43,7 +63,7 @@ export async function saveSchedule(userId: number, schedule: boolean[][]): Promi
 export async function loadSchedule(userId: number): Promise<boolean[][] | null> {
   try {
     // 서버에서 먼저 불러오기 시도
-    const response = await fetch(`/api/schedule/${userId}`);
+    const response = await apiFetch(`/api/schedule/${userId}`);
     
     if (response.ok) {
       const data = await response.json();
@@ -108,7 +128,7 @@ export async function saveDateSchedule(userId: number, dateSchedule: DateSchedul
       localStorage.setItem(key, data);
     }
 
-    const response = await fetch(`/api/date-schedule/${userId}`, {
+    const response = await apiFetch(`/api/date-schedule/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ dateSchedule }),
@@ -127,7 +147,7 @@ export async function saveDateSchedule(userId: number, dateSchedule: DateSchedul
  */
 export async function loadDateSchedule(userId: number): Promise<DateScheduleMap | null> {
   try {
-    const response = await fetch(`/api/date-schedule/${userId}`);
+    const response = await apiFetch(`/api/date-schedule/${userId}`);
 
     if (response.ok) {
       const data = await response.json();
@@ -172,7 +192,7 @@ export async function saveUser(userId: number, userData: object): Promise<void> 
     if (typeof window !== 'undefined') {
       localStorage.setItem(`user_${userId}`, JSON.stringify(userData));
     }
-    const response = await fetch(`/api/user/${userId}`, {
+    const response = await apiFetch(`/api/user/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
@@ -190,7 +210,7 @@ export async function saveUser(userId: number, userData: object): Promise<void> 
  */
 export async function loadUser(userId: number): Promise<Record<string, unknown> | null> {
   try {
-    const response = await fetch(`/api/user/${userId}`);
+    const response = await apiFetch(`/api/user/${userId}`);
     if (response.ok) {
       const data = await response.json();
       if (data.user) {
@@ -283,7 +303,7 @@ const GROUP_INVITATIONS_KEY_PREFIX = 'group_invitations_';
 export async function loadPendingInvitations(userId: number): Promise<GroupInvitation[]> {
   const key = `${GROUP_INVITATIONS_KEY_PREFIX}${userId}`;
   try {
-    const response = await fetch(`/api/group-invitations/${userId}`);
+    const response = await apiFetch(`/api/group-invitations/${userId}`);
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data.invitations)) {
@@ -313,7 +333,7 @@ async function saveAllGroupInvitations(userId: number, invitations: GroupInvitat
     if (typeof window !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(invitations));
     }
-    await fetch(`/api/group-invitations/${userId}`, {
+    await apiFetch(`/api/group-invitations/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ invitations }),
@@ -328,11 +348,25 @@ async function saveAllGroupInvitations(userId: number, invitations: GroupInvitat
  * @param userNickname 초대받을 사용자 닉네임
  * @param invitation 그룹 초대 정보
  */
-export async function saveGroupInvitation(userNickname: string, invitation: GroupInvitation): Promise<void> {
+export async function saveGroupInvitation(userNickname: string, invitation: GroupInvitation): Promise<boolean> {
   const userId = nicknameToId(userNickname);
-  const existing = await loadPendingInvitations(userId);
-  if (existing.some(inv => inv.groupId === invitation.groupId)) return;
-  await saveAllGroupInvitations(userId, [...existing, invitation]);
+
+  try {
+    // 서버가 상대 초대함에 덧붙인다 (상대 목록을 통째로 덮어쓰지 않음)
+    const response = await apiFetch(`/api/group-invitations/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invitation }),
+    });
+    if (!response.ok) {
+      console.error('그룹 초대 전송 실패:', response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('그룹 초대 전송 실패:', error);
+    return false;
+  }
 }
 
 /**
@@ -383,7 +417,7 @@ const NOTIFICATIONS_KEY_PREFIX = 'notifications_';
 export async function loadNotifications(userId: number): Promise<AppNotification[]> {
   const key = `${NOTIFICATIONS_KEY_PREFIX}${userId}`;
   try {
-    const response = await fetch(`/api/notifications/${userId}`);
+    const response = await apiFetch(`/api/notifications/${userId}`);
     if (response.ok) {
       const data = await response.json();
       if (Array.isArray(data.notifications)) {
@@ -413,7 +447,7 @@ export async function saveAllNotifications(userId: number, notifications: AppNot
     if (typeof window !== 'undefined') {
       localStorage.setItem(key, JSON.stringify(notifications));
     }
-    await fetch(`/api/notifications/${userId}`, {
+    await apiFetch(`/api/notifications/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notifications }),
@@ -438,7 +472,7 @@ export async function saveNotification(userNickname: string, notification: Omit<
   };
 
   try {
-    const response = await fetch(`/api/notifications/${userId}`, {
+    const response = await apiFetch(`/api/notifications/${userId}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ notification: newNotification }),

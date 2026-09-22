@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { attachSessionCookie, createSessionToken } from '../../../lib/wordgame/session';
+import { attachSessionCookie, createSessionToken } from '../../../lib/session';
 
 const isKvConfigured = process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
 

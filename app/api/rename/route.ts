@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSelf } from '../../lib/apiAuth';
+import { attachSessionCookie, createSessionToken } from '../../lib/session';
 import crypto from 'crypto';
 
 const isKvConfigured =
@@ -15,6 +17,10 @@ function hashPassword(password: string): string {
  */
 export async function POST(request: NextRequest) {
   const { oldUserId, newUserId, password } = await request.json();
+
+  // 본인 계정만 닉네임을 바꿀 수 있다
+  const session = await requireSelf(request, oldUserId);
+  if (!session.ok) return session.response;
 
   if (!oldUserId || !newUserId || !password) {
     return NextResponse.json({ success: false, error: '필수 값이 누락되었습니다.' }, { status: 400 });
@@ -65,7 +71,13 @@ export async function POST(request: NextRequest) {
       kv.del(`user:${oldUserId}`),
     ]);
 
-    return NextResponse.json({ success: true });
+    // 닉네임이 바뀌면 userId 도 바뀌므로 세션을 새 userId 로 재발급한다
+    const response = NextResponse.json({ success: true });
+    try {
+      return attachSessionCookie(response, await createSessionToken(Number(newUserId)));
+    } catch {
+      return response;
+    }
   } catch (error) {
     console.error('[rename API] error:', error);
     return NextResponse.json({ success: false, error: '서버 오류가 발생했습니다.' }, { status: 500 });

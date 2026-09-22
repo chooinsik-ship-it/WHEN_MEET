@@ -5,7 +5,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { PERIODS, RANKING_TYPES, RATE_LIMITS, MAX_PAGE_SIZE, PAGE_SIZE, type Period, type RankingType } from './config';
 import { GameError } from './service';
 import { checkRateLimit, isKvConfigured } from './store';
-import { getUserIdFromRequest } from './session';
+import { getUserIdFromRequest } from '../session';
 
 /** 로그인 확인 — 요청 본문의 userId 는 절대 신뢰하지 않는다 */
 export async function requireUser(request: NextRequest): Promise<number> {

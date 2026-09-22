@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { requireSelf, requireSession } from '../../../lib/apiAuth';
 
 const isKvConfigured =
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
@@ -11,6 +12,10 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
+  // 로그인한 사용자만 조회 가능 (친구 시간표 비교 때문에 타인 조회는 허용)
+  const session = await requireSession(request);
+  if (!session.ok) return session.response;
+
   if (!isKvConfigured) {
     return NextResponse.json({ dateSchedule: null });
   }
@@ -35,6 +40,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ userId: string }> }
 ) {
+  // 쓰기는 본인 데이터만
+  const { userId: targetId } = await params;
+  const session = await requireSelf(request, targetId);
+  if (!session.ok) return session.response;
+
   if (!isKvConfigured) {
     return NextResponse.json({ success: true });
   }
