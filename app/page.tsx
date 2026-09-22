@@ -9,6 +9,7 @@ import GroupScheduleModal from './components/GroupScheduleModal';
 import GroupInvitationModal from './components/GroupInvitationModal';
 import DateSchedule from './components/DateSchedule';
 import WordGameTab from './components/WordGame/WordGameTab';
+import PushSetup from './components/PushSetup';
 import LocationEditor from './components/LocationEditor';
 const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
@@ -1964,6 +1965,7 @@ export default function Home() {
                   <button onClick={() => setShowNotifications(false)} className="text-gray-400 hover:text-gray-600 cursor-pointer">✕</button>
                 </div>
               </div>
+              <PushSetup />
               {notifications.length === 0 ? (
                 <p className="text-sm text-gray-400 text-center py-6">알림이 없어요.</p>
               ) : (

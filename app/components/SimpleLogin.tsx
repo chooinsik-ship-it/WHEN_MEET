@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef } from 'react';
+import { RecoveryCodeIssuer, RecoveryResetForm } from './PasswordRecovery';
 
 interface User {
   id: number;
@@ -30,6 +31,8 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
 
   // 프로필 설정 모달
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showRecovery, setShowRecovery] = useState(false);
+  const [recoveryDone, setRecoveryDone] = useState<string | null>(null);
   const [profileTab, setProfileTab] = useState<'avatar' | 'password'>('avatar');
 
   // 아바타 탭
@@ -196,6 +199,20 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
   };
 
   if (!currentUser) {
+    // 비밀번호 재설정 화면
+    if (showRecovery) {
+      return (
+        <RecoveryResetForm
+          onCancel={() => setShowRecovery(false)}
+          onSuccess={(name) => {
+            setShowRecovery(false);
+            setRecoveryDone(name);
+            setNickname(name);
+          }}
+        />
+      );
+    }
+
     return (
       <form onSubmit={handleLogin} className="flex flex-col gap-1.5 items-end w-full sm:w-auto">
         <div className="flex items-center gap-1.5 flex-wrap justify-end">
@@ -224,7 +241,21 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
           </button>
         </div>
         {error && <p className="text-xs text-red-500">{error}</p>}
-        <p className="text-xs text-gray-400">💡 처음 사용하시면 비밀번호가 자동 설정됩니다</p>
+        {recoveryDone && (
+          <p className="text-xs text-green-600">
+            ✅ {recoveryDone}님의 비밀번호를 재설정했어요. 새 비밀번호로 시작하세요.
+          </p>
+        )}
+        <div className="flex items-center gap-2">
+          <p className="text-xs text-gray-400">💡 처음 사용하시면 비밀번호가 자동 설정됩니다</p>
+          <button
+            type="button"
+            onClick={() => { setShowRecovery(true); setError(''); }}
+            className="text-xs text-brand-600 underline hover:text-brand-700 cursor-pointer"
+          >
+            비밀번호를 잊으셨나요?
+          </button>
+        </div>
       </form>
     );
   }
@@ -396,6 +427,7 @@ export default function SimpleLogin({ onLogin, onLogout, currentUser, onUpdatePr
                         {pwLoading ? '변경 중...' : '변경하기'}
                       </button>
                     </div>
+                    <RecoveryCodeIssuer userId={currentUser.id} />
                   </form>
                 )
               )}

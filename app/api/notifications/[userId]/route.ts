@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSelf, requireSession, sessionNickname } from '../../../lib/apiAuth';
+import { sendPushToUser } from '../../../lib/push';
 
 const isKvConfigured =
   process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN;
@@ -73,6 +74,14 @@ export async function POST(
       // 재전송으로 같은 알림이 두 번 쌓이지 않도록
       if (!existing.some(n => n.id === notification.id)) {
         await kv.set(key, [notification, ...existing]);
+
+        // 앱을 닫아둔 상태에서도 받도록 웹 푸시 발송 (구독한 기기가 없으면 아무 일도 하지 않음)
+        await sendPushToUser(Number(userId), {
+          title: '언제만나',
+          body: typeof notification.message === 'string' ? notification.message : '새 알림이 도착했어요.',
+          url: '/',
+          tag: typeof notification.type === 'string' ? notification.type : 'whenmeet',
+        });
       }
       return NextResponse.json({ success: true });
     }
