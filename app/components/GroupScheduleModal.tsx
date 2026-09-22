@@ -189,8 +189,8 @@ export default function GroupScheduleModal({
     });
 
   return (
-    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
+      <div className="bg-white rounded-lg shadow-2xl max-w-6xl w-full max-h-[90dvh] flex flex-col overflow-hidden">
         {/* 헤더 */}
         <div className="flex-shrink-0 bg-white border-b border-gray-200 px-6 py-4 flex justify-between items-center">
           <div>

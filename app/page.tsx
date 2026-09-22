@@ -1123,7 +1123,7 @@ export default function Home() {
   })();
 
   return (
-    <div className="min-h-screen bg-brand-50 py-4 sm:py-8 px-3 sm:px-4">
+    <div className="min-h-screen bg-brand-50 py-4 sm:py-8 px-3 sm:px-4 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <header className="mb-8">
@@ -1217,53 +1217,58 @@ export default function Home() {
             <div className="flex mb-6 border-b border-gray-300">
               <button
                 onClick={() => setActiveTab('my')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                className={`flex-1 whitespace-nowrap px-1.5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'my'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
                     : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
-                내 시간표
+                <span className="sm:hidden">시간표</span>
+                <span className="hidden sm:inline">내 시간표</span>
               </button>
               <button
                 onClick={() => setActiveTab('compare')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                className={`flex-1 whitespace-nowrap px-1.5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'compare'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
                     : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
-                친구들과 비교
+                <span className="sm:hidden">비교</span>
+                <span className="hidden sm:inline">친구들과 비교</span>
               </button>
               <button
                 onClick={() => setActiveTab('group')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                className={`flex-1 whitespace-nowrap px-1.5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'group'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
                     : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
-                그룹 관리
+                <span className="sm:hidden">그룹</span>
+                <span className="hidden sm:inline">그룹 관리</span>
               </button>
               <button
                 onClick={() => setActiveTab('date')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                className={`flex-1 whitespace-nowrap px-1.5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'date'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
                     : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
-                날짜별 일정
+                <span className="sm:hidden">날짜</span>
+                <span className="hidden sm:inline">날짜별 일정</span>
               </button>
               <button
                 onClick={() => setActiveTab('game')}
-                className={`flex-1 px-2 sm:px-6 py-2 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
+                className={`flex-1 whitespace-nowrap px-1.5 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base font-semibold transition-all duration-200 rounded-t-lg cursor-pointer ${
                   activeTab === 'game'
                     ? 'border-b-2 border-brand-500 text-brand-700 bg-brand-50'
                     : 'text-gray-600 hover:text-brand-700 hover:bg-brand-100'
                 }`}
               >
-                단어 게임
+                <span className="sm:hidden">게임</span>
+                <span className="hidden sm:inline">단어 게임</span>
               </button>
             </div>
 
@@ -1938,7 +1943,7 @@ export default function Home() {
 
       {/* 우측 하단 고정 알림 버튼 */}
       {currentUser && (
-        <div className="fixed bottom-6 right-4 sm:right-6 z-50">
+        <div className="fixed bottom-[calc(1.5rem+env(safe-area-inset-bottom))] right-[calc(1rem+env(safe-area-inset-right))] sm:right-6 z-50">
           {showNotifications && (
             <div className="absolute bottom-14 right-0 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
@@ -2289,7 +2294,7 @@ export default function Home() {
       
       {/* 친구 삭제 확인 모달 */}
       {deleteConfirmFriend && (
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="bg-white rounded-lg shadow-2xl max-w-sm w-full p-6">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -2324,7 +2329,7 @@ export default function Home() {
 
       {/* 그룹 삭제 확인 모달 */}
       {deleteConfirmGroup && (
-        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6">
             <div className="text-center mb-6">
               <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">

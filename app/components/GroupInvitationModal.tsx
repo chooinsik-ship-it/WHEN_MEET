@@ -18,7 +18,7 @@ export default function GroupInvitationModal({
   onDecline,
 }: GroupInvitationModalProps) {
   return (
-    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div className="fixed inset-0 backdrop-blur-sm flex items-center justify-center z-50 p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6 animate-fade-in">
         {/* 헤더 */}
         <div className="text-center mb-6">

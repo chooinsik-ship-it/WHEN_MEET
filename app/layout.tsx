@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Jua } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
@@ -22,6 +22,18 @@ const jua = Jua({
 export const metadata: Metadata = {
   title: "언제만나 - 시간표 비교 서비스",
   description: "친구들과 시간표를 비교하고 만날 수 있는 시간을 찾아보세요",
+};
+
+/**
+ * 모바일 뷰포트 설정
+ * viewportFit: 'cover' → 아이폰의 다이내믹 아일랜드/홈 인디케이터 영역까지 화면을 쓰고,
+ * 고정 요소는 env(safe-area-inset-*) 로 그 영역을 피한다.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#6B80A5",
 };
 
 export default function RootLayout({

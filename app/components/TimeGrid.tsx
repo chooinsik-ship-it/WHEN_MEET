@@ -198,6 +198,48 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
 
   const busyCount = schedule.flat().filter(Boolean).length;
 
+  /**
+   * 칸 하나. 모바일(세로형)·데스크탑(가로형) 레이아웃이 같은 셀을 공유한다.
+   * 드래그 로직은 data-day/data-hour 만 보므로 배치가 달라져도 그대로 동작한다.
+   */
+  const renderCell = (dayIdx: number, hourIdx: number, compact: boolean) => {
+    const isBusy = schedule[dayIdx][hourIdx];
+    const appt = appointments.find(
+      a => a.day === dayIdx && hourIdx >= a.startHour && hourIdx < a.endHour
+    );
+    const isPending = appt?.status === 'pending';
+
+    return (
+      <div
+        key={`${dayIdx}-${hourIdx}`}
+        data-day={dayIdx}
+        data-hour={hourIdx}
+        data-appt-id={appt ? appt.id : undefined}
+        style={{ touchAction: 'none' }}
+        title={appt
+          ? isPending
+            ? `${appt.name} (대기 중 - 참여자 수락 필요)`
+            : `${appt.name} (클릭하여 수정/취소)`
+          : undefined}
+        onPointerDown={appt ? (e) => e.stopPropagation() : undefined}
+        onClick={appt && onAppointmentClick ? (e) => { e.stopPropagation(); onAppointmentClick(appt.id); } : undefined}
+        className={`
+          border-b border-r border-gray-200
+          transition-all duration-150
+          hover:ring-2 hover:z-10
+          ${compact ? 'min-h-[26px]' : 'min-h-[32px]'}
+          ${appt
+            ? isPending
+              ? 'bg-yellow-200 hover:bg-yellow-300 hover:ring-yellow-300 cursor-pointer'
+              : 'bg-blue-500 hover:bg-blue-400 hover:ring-blue-300 cursor-pointer'
+            : isBusy
+              ? 'bg-green-400 hover:bg-green-500 hover:ring-brand-300'
+              : 'bg-white hover:bg-gray-100 hover:ring-brand-300'}
+        `}
+      />
+    );
+  };
+
   return (
     <div className="w-full">
       {busyCount === 0 && (
@@ -267,7 +309,7 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
 
       <div
         ref={gridRef}
-        className={`select-none overflow-auto max-h-[55vh] sm:max-h-[600px] rounded-lg transition-all duration-200 ${
+        className={`select-none overflow-auto max-h-[60dvh] sm:max-h-[600px] rounded-lg transition-all duration-200 ${
           editMode
             ? 'border-2 border-brand-400 ring-2 ring-brand-200'
             : 'border border-gray-300'
@@ -278,8 +320,9 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
         onPointerCancel={handlePointerUp}
         onPointerMove={handlePointerMove}
       >
-        <div className="grid grid-cols-[80px_repeat(24,1fr)] sm:grid-cols-[100px_repeat(24,1fr)] gap-0 min-w-[700px]">
-          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 p-1 sm:p-2 text-center font-semibold text-black text-xs">
+        {/* 데스크탑: 요일 = 행, 시간 = 열 */}
+        <div className="hidden sm:grid sm:grid-cols-[100px_repeat(24,1fr)] gap-0 min-w-[700px]">
+          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 p-2 text-center font-semibold text-black text-xs">
             요일
           </div>
           {HOURS.map((hour) => (
@@ -293,51 +336,43 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
 
           {DAYS.map((day, dayIdx) => (
             <React.Fragment key={day}>
-              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 p-1 sm:p-3 text-center font-bold text-xs sm:text-sm text-brand-800">
-                {day.replace('요일', '')}<span className="hidden sm:inline">요일</span>
+              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 p-3 text-center font-bold text-sm text-brand-800">
+                {day}
               </div>
-              {HOURS.map((_, hourIdx) => {
-                const isBusy = schedule[dayIdx][hourIdx];
-                const appt = appointments.find(
-                  a => a.day === dayIdx && hourIdx >= a.startHour && hourIdx < a.endHour
-                );
-                const isPending = appt?.status === 'pending';
-                return (
-                  <div
-                    key={`${dayIdx}-${hourIdx}`}
-                    data-day={dayIdx}
-                    data-hour={hourIdx}
-                    data-appt-id={appt ? appt.id : undefined}
-                    style={{ touchAction: 'none' }}
-                    title={appt
-                      ? isPending
-                        ? `${appt.name} (대기 중 - 참여자 수락 필요)`
-                        : `${appt.name} (클릭하여 수정/취소)`
-                      : undefined}
-                    onPointerDown={appt ? (e) => e.stopPropagation() : undefined}
-                    onClick={appt && onAppointmentClick ? (e) => { e.stopPropagation(); onAppointmentClick(appt.id); } : undefined}
-                    className={`
-                      border-b border-r border-gray-200
-                      transition-all duration-150
-                      hover:ring-2 hover:z-10
-                      min-h-[32px]
-                      ${appt
-                        ? isPending
-                          ? 'bg-yellow-200 hover:bg-yellow-300 hover:ring-yellow-300 cursor-pointer'
-                          : 'bg-blue-500 hover:bg-blue-400 hover:ring-blue-300 cursor-pointer'
-                        : isBusy
-                          ? 'bg-green-400 hover:bg-green-500 hover:ring-brand-300'
-                          : 'bg-white hover:bg-gray-100 hover:ring-brand-300'}
-                    `}
-                  />
-                );
-              })}
+              {HOURS.map((_, hourIdx) => renderCell(dayIdx, hourIdx, false))}
+            </React.Fragment>
+          ))}
+        </div>
+
+        {/* 모바일: 시간 = 행, 요일 = 열 → 가로 스크롤 없이 7일이 한 화면에 들어온다 */}
+        <div className="grid grid-cols-[38px_repeat(7,1fr)] gap-0 sm:hidden">
+          <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b-2 border-r-2 border-gray-400 py-1.5 text-center text-[10px] font-semibold text-black">
+            시간
+          </div>
+          {DAYS.map((day) => (
+            <div
+              key={day}
+              className="sticky top-0 z-10 bg-gray-100 border-b-2 border-r border-gray-400 py-1.5 text-center text-[11px] font-semibold text-black"
+            >
+              {day.replace('요일', '')}
+            </div>
+          ))}
+
+          {HOURS.map((hour) => (
+            <React.Fragment key={hour}>
+              <div className="sticky left-0 z-10 bg-brand-50 border-b border-r-2 border-gray-300 py-1 text-center text-[10px] font-bold text-brand-800 tabular-nums">
+                {hour}시
+              </div>
+              {DAYS.map((_, dayIdx) => renderCell(dayIdx, hour, true))}
             </React.Fragment>
           ))}
         </div>
       </div>
 
-      <p className="mt-2 text-xs text-gray-400 text-right">← 좌우로 스크롤하세요 →</p>
+      <p className="mt-2 text-xs text-gray-400 text-right">
+        <span className="sm:hidden">↕ 위아래로 스크롤하세요</span>
+        <span className="hidden sm:inline">← 좌우로 스크롤하세요 →</span>
+      </p>
       <div className="mt-2 sm:mt-4 space-y-1 sm:space-y-2">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span className="text-lg">🖌️</span>

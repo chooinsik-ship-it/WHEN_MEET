@@ -109,50 +109,66 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
         </div>
       </div>
       
-      <div className="overflow-x-auto">
-      <div className="grid grid-cols-[60px_repeat(24,1fr)] sm:grid-cols-[80px_repeat(24,1fr)] gap-0 border border-gray-300 min-w-[700px]">
-        {/* 헤더: 시간 표시 */}
-        <div className="bg-gray-100 border-b border-r border-gray-300 p-1 sm:p-2 text-center font-semibold text-black text-xs">
-          요일
-        </div>
-        {HOURS.map((hour) => (
+      {/* 겹침 칸 (모바일/데스크탑 공통) */}
+      {(() => {
+        const cell = (dayIdx: number, hourIdx: number, compact: boolean) => (
           <div
-            key={hour}
-            className="bg-gray-100 border-b border-r border-gray-300 p-1 text-center text-xs font-semibold text-black"
-          >
-            {hour}
-          </div>
-        ))}
+            key={`${dayIdx}-${hourIdx}`}
+            className={`border-b border-r border-gray-300 ${compact ? 'min-h-[24px]' : 'aspect-square'} ${getColorClass(getOverlapLevel(dayIdx, hourIdx))}`}
+            title={getCellTitle(dayIdx, hourIdx)}
+          />
+        );
 
-        {/* 각 요일별 행 */}
-        {DAYS.map((day, dayIdx) => (
-          <React.Fragment key={day}>
-            {/* 요일 라벨 */}
-            <div className="bg-gray-100 border-b border-r border-gray-300 p-1 sm:p-2 text-center font-semibold text-xs text-black">
-              {day.replace('요일', '')}<span className="hidden sm:inline">요일</span>
+        return (
+          <>
+            {/* 데스크탑: 요일 = 행, 시간 = 열 */}
+            <div className="hidden sm:block overflow-x-auto">
+              <div className="grid grid-cols-[80px_repeat(24,1fr)] gap-0 border border-gray-300 min-w-[700px]">
+                <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-black text-xs">
+                  요일
+                </div>
+                {HOURS.map((hour) => (
+                  <div key={hour} className="bg-gray-100 border-b border-r border-gray-300 p-1 text-center text-xs font-semibold text-black">
+                    {hour}
+                  </div>
+                ))}
+
+                {DAYS.map((day, dayIdx) => (
+                  <React.Fragment key={day}>
+                    <div className="bg-gray-100 border-b border-r border-gray-300 p-2 text-center font-semibold text-xs text-black">
+                      {day}
+                    </div>
+                    {HOURS.map((_, hourIdx) => cell(dayIdx, hourIdx, false))}
+                  </React.Fragment>
+                ))}
+              </div>
             </div>
-            
-            {/* 시간 칸들 - 겹침 레벨에 따라 색상 표시 */}
-            {HOURS.map((hour, hourIdx) => {
-              const overlapLevel = getOverlapLevel(dayIdx, hourIdx);
-              const colorClass = getColorClass(overlapLevel);
-              
-              return (
-                <div
-                  key={`${dayIdx}-${hourIdx}`}
-                  className={`
-                    border-b border-r border-gray-300 
-                    aspect-square
-                    ${colorClass}
-                  `}
-                  title={getCellTitle(dayIdx, hourIdx)}
-                />
-              );
-            })}
-          </React.Fragment>
-        ))}
-      </div>
-      </div>
+
+            {/* 모바일: 시간 = 행, 요일 = 열 → 7일이 한 화면에 들어온다 */}
+            <div className="sm:hidden max-h-[60dvh] overflow-y-auto rounded-lg border border-gray-300">
+              <div className="grid grid-cols-[38px_repeat(7,1fr)] gap-0">
+                <div className="sticky top-0 left-0 z-20 bg-gray-100 border-b border-r border-gray-300 py-1.5 text-center text-[10px] font-semibold text-black">
+                  시간
+                </div>
+                {DAYS.map((day) => (
+                  <div key={day} className="sticky top-0 z-10 bg-gray-100 border-b border-r border-gray-300 py-1.5 text-center text-[11px] font-semibold text-black">
+                    {day.replace('요일', '')}
+                  </div>
+                ))}
+
+                {HOURS.map((hour) => (
+                  <React.Fragment key={hour}>
+                    <div className="sticky left-0 z-10 bg-gray-100 border-b border-r border-gray-300 py-1 text-center text-[10px] font-semibold text-black tabular-nums">
+                      {hour}시
+                    </div>
+                    {DAYS.map((_, dayIdx) => cell(dayIdx, hour, true))}
+                  </React.Fragment>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+      })()}
     </div>
   );
 }
