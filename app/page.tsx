@@ -1123,7 +1123,7 @@ export default function Home() {
   })();
 
   return (
-    <div className="min-h-screen bg-brand-50 py-4 sm:py-8 px-3 sm:px-4 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[calc(1rem+env(safe-area-inset-bottom))]">
+    <div className="min-h-dvh bg-brand-50 py-4 sm:py-8 px-3 sm:px-4 pl-[max(0.75rem,env(safe-area-inset-left))] pr-[max(0.75rem,env(safe-area-inset-right))] pb-[calc(1rem+env(safe-area-inset-bottom))]">
       <div className="max-w-7xl mx-auto">
         {/* 헤더 */}
         <header className="mb-8">

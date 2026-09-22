@@ -227,7 +227,7 @@ export default function TimeGrid({ schedule, onChange, title, appointments = [],
           border-b border-r border-gray-200
           transition-all duration-150
           hover:ring-2 hover:z-10
-          ${compact ? 'min-h-[26px]' : 'min-h-[32px]'}
+          ${compact ? 'min-h-[30px]' : 'min-h-[32px]'}
           ${appt
             ? isPending
               ? 'bg-yellow-200 hover:bg-yellow-300 hover:ring-yellow-300 cursor-pointer'

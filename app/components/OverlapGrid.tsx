@@ -114,7 +114,7 @@ export default function OverlapGrid({ schedule1, schedule2, allSchedules, partic
         const cell = (dayIdx: number, hourIdx: number, compact: boolean) => (
           <div
             key={`${dayIdx}-${hourIdx}`}
-            className={`border-b border-r border-gray-300 ${compact ? 'min-h-[24px]' : 'aspect-square'} ${getColorClass(getOverlapLevel(dayIdx, hourIdx))}`}
+            className={`border-b border-r border-gray-300 ${compact ? 'min-h-[28px]' : 'aspect-square'} ${getColorClass(getOverlapLevel(dayIdx, hourIdx))}`}
             title={getCellTitle(dayIdx, hourIdx)}
           />
         );
