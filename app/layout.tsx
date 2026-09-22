@@ -36,6 +36,10 @@ export const metadata: Metadata = {
     title: "언제만나",
     statusBarStyle: "default",
   },
+  // iOS 16.4 미만에서도 홈 화면 앱이 전체화면으로 뜨도록 (구형 키)
+  other: {
+    "apple-mobile-web-app-capable": "yes",
+  },
 };
 
 /**
