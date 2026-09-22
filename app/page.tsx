@@ -10,6 +10,7 @@ import GroupInvitationModal from './components/GroupInvitationModal';
 import DateSchedule from './components/DateSchedule';
 import WordGameTab from './components/WordGame/WordGameTab';
 import PushSetup from './components/PushSetup';
+import RecoveryBanner from './components/RecoveryBanner';
 import LocationEditor from './components/LocationEditor';
 const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
@@ -30,6 +31,10 @@ import {
   removeNotification,
   saveNotification,
   saveAllNotifications,
+  loadFriendNicknames,
+  saveFriendNicknames,
+  linkFriend,
+  unlinkFriend,
   saveAppointmentForUser,
   removeAppointmentForUser,
   updateAppointmentForUser,
@@ -214,10 +219,10 @@ export default function Home() {
     setDateSchedule(savedDateSchedule ?? {});
     setIsLoadingSchedule(false);
 
-    // 저장된 친구 목록 불러오기 (닉네임 → 서버에서 시간표 재로드)
-    const savedFriendNicknames = localStorage.getItem(`friends_${user.id}`);
-    if (savedFriendNicknames) {
-      const nicknames: string[] = JSON.parse(savedFriendNicknames);
+    // 친구 목록은 서버가 원본 (다른 기기에서도 같은 목록이 보인다)
+    const serverFriendNicknames = await loadFriendNicknames(user.id);
+    if (serverFriendNicknames.length > 0) {
+      const nicknames: string[] = serverFriendNicknames;
       const loadedFriends = await Promise.all(
         nicknames.map(async (nickname) => {
           const id = Math.abs(nickname.split('').reduce((acc: number, char: string) => {
@@ -478,20 +483,19 @@ export default function Home() {
       location: fromUserData?.location as string | undefined,
     };
 
-    // 내 친구 목록에 추가
+    // 서버에서 양쪽 친구 목록을 연결 (상대가 다른 기기에 있어도 반영된다)
+    const linked = await linkFriend(fromNickname);
+    if (!linked) {
+      alert('친구 연결에 실패했어요. 잠시 후 다시 시도해주세요.');
+      return;
+    }
+
     const updatedFriends = [...friends, newFriend];
     setFriends(updatedFriends);
     localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
 
-    // 요청자의 친구 목록에도 나를 추가
     try {
-      const theirKey = `friends_${fromId}`;
-      const theirList: string[] = JSON.parse(localStorage.getItem(theirKey) || '[]');
-      if (!theirList.includes(currentUser.nickname)) {
-        theirList.push(currentUser.nickname);
-        localStorage.setItem(theirKey, JSON.stringify(theirList));
-      }
-      // 요청자의 발송 기록 제거
+      // 요청자의 발송 기록 제거 (같은 브라우저인 경우)
       const sentKey = `friend_requests_sent_${fromId}`;
       const sentList: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
       localStorage.setItem(sentKey, JSON.stringify(sentList.filter((s: string) => s !== currentUser.nickname)));
@@ -543,14 +547,12 @@ export default function Home() {
     setFriends(updatedFriends);
     setSelectedFriendIds(prev => prev.filter(id => id !== friendId));
     if (currentUser) {
-      // 내 친구 목록에서 제거
-      localStorage.setItem(`friends_${currentUser.id}`, JSON.stringify(updatedFriends.map(f => f.nickname)));
+      // 내 친구 목록 저장 (서버 + 로컬)
+      saveFriendNicknames(currentUser.id, updatedFriends.map(f => f.nickname));
 
       if (removedFriend) {
-        // 상대방 친구 목록에서 나를 제거
-        const theirKey = `friends_${friendId}`;
-        const theirList: string[] = JSON.parse(localStorage.getItem(theirKey) || '[]');
-        localStorage.setItem(theirKey, JSON.stringify(theirList.filter(n => n !== currentUser.nickname)));
+        // 서버에서 양쪽 관계를 끊는다
+        unlinkFriend(removedFriend.nickname);
 
         // 상대방에게 알림 전송 (fromNickname 포함)
         saveNotification(removedFriend.nickname, {
@@ -1245,6 +1247,8 @@ export default function Home() {
           </div>
         ) : (
           <>
+            <RecoveryBanner userId={currentUser.id} />
+
             {/* 탭 네비게이션 */}
             <div className="flex mb-6 border-b border-gray-300">
               <button

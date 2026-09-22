@@ -269,6 +269,95 @@ export function getAllSavedUserIds(): number[] {
   }
 }
 
+/* ------------------------------------------------------------------ 친구 */
+
+const FRIENDS_KEY_PREFIX = 'friends_';
+
+/**
+ * 친구 목록 불러오기 (서버가 원본, localStorage 는 캐시)
+ *
+ * 예전에는 localStorage 에만 있어서 다른 기기로 로그인하면 친구가 사라졌다.
+ * 서버에 목록이 없고 로컬에만 있으면 이번 로그인에 자동으로 이전한다.
+ */
+export async function loadFriendNicknames(userId: number): Promise<string[]> {
+  const key = `${FRIENDS_KEY_PREFIX}${userId}`;
+  const local: string[] =
+    typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(key) || '[]') : [];
+
+  try {
+    const response = await apiFetch(`/api/friends/${userId}`);
+    if (response.ok) {
+      const data = await response.json();
+      const server: string[] = Array.isArray(data.friends) ? data.friends : [];
+
+      // 서버가 비어 있고 로컬에만 있으면 기존 데이터를 서버로 이전
+      if (server.length === 0 && local.length > 0) {
+        await saveFriendNicknames(userId, local);
+        return local;
+      }
+
+      if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(server));
+      return server;
+    }
+  } catch (error) {
+    console.error('친구 목록 불러오기 실패:', error);
+  }
+
+  return local;
+}
+
+/** 내 친구 목록 저장 (서버 + 로컬) */
+export async function saveFriendNicknames(userId: number, nicknames: string[]): Promise<void> {
+  const unique = [...new Set(nicknames)];
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`${FRIENDS_KEY_PREFIX}${userId}`, JSON.stringify(unique));
+  }
+  try {
+    await apiFetch(`/api/friends/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ friends: unique }),
+    });
+  } catch (error) {
+    console.error('친구 목록 저장 실패:', error);
+  }
+}
+
+/**
+ * 친구 요청 수락 — 서버가 양쪽 목록에 서로를 추가한다.
+ * (상대가 다른 기기에 있어도 반영된다)
+ */
+export async function linkFriend(partnerNickname: string): Promise<boolean> {
+  try {
+    const response = await apiFetch('/api/friends/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partnerNickname }),
+    });
+    if (!response.ok) {
+      console.error('친구 연결 실패:', response.status);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error('친구 연결 실패:', error);
+    return false;
+  }
+}
+
+/** 친구 삭제 — 서버가 양쪽 목록에서 제거한다 */
+export async function unlinkFriend(partnerNickname: string): Promise<void> {
+  try {
+    await apiFetch('/api/friends/link', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ partnerNickname }),
+    });
+  } catch (error) {
+    console.error('친구 삭제 실패:', error);
+  }
+}
+
 /**
  * 그룹 초대 인터페이스
  */
