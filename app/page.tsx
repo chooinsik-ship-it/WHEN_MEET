@@ -83,6 +83,12 @@ function createEmptySchedule(): boolean[][] {
 export default function Home() {
   // 현재 로그인한 사용자
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  /**
+   * 저장된 로그인 정보를 복원하는 동안 true.
+   * 이 값을 보지 않고 바로 렌더하면 새로고침할 때마다
+   * "로그인 화면 → 로그인됨"으로 한 번 깜빡인다.
+   */
+  const [restoringSession, setRestoringSession] = useState(true);
   
   // 내 시간표
   const [mySchedule, setMySchedule] = useState<boolean[][]>(createEmptySchedule());
@@ -168,10 +174,20 @@ export default function Home() {
    */
   useEffect(() => {
     const savedUser = localStorage.getItem('currentUser');
-    if (savedUser) {
-      const user = JSON.parse(savedUser) as User;
-      handleLogin(user);
+    if (!savedUser) {
+      setRestoringSession(false);
+      return;
     }
+
+    (async () => {
+      try {
+        await handleLogin(JSON.parse(savedUser) as User);
+      } catch (error) {
+        console.error('로그인 복원 실패:', error);
+      } finally {
+        setRestoringSession(false);
+      }
+    })();
   }, []);
 
   /**
@@ -1152,15 +1168,19 @@ export default function Home() {
               </h1>
             </div>
             <div className="flex justify-center sm:justify-end items-center gap-2">
-              <SimpleLogin
-                currentUser={currentUser}
-                onLogin={handleLogin}
-                onLogout={handleLogout}
-                onUpdateProfile={handleUpdateProfile}
-              />
+              {restoringSession ? (
+                <div className="h-10 w-40 animate-pulse rounded-lg bg-gray-200" aria-label="불러오는 중" />
+              ) : (
+                <SimpleLogin
+                  currentUser={currentUser}
+                  onLogin={handleLogin}
+                  onLogout={handleLogout}
+                  onUpdateProfile={handleUpdateProfile}
+                />
+              )}
             </div>
           </div>
-          {!currentUser && (
+          {!currentUser && !restoringSession && (
             <div className="text-center space-y-1">
               <p className="text-black">
                 <span className="font-semibold">드래그</span>로 바쁜 시간을 표시하면, 친구와 겹치는 시간을 <span className="font-semibold">자동 추천</span>해드려요.
@@ -1170,7 +1190,18 @@ export default function Home() {
           )}
         </header>
 
-        {!currentUser ? (
+        {restoringSession ? (
+          // 저장된 로그인 복원 중 — 로그인 화면을 스쳐 보여주지 않는다
+          <div className="bg-white rounded-lg shadow-lg p-6 sm:p-12">
+            <div className="mx-auto h-6 w-40 animate-pulse rounded bg-gray-200" />
+            <div className="mx-auto mt-4 h-4 w-64 animate-pulse rounded bg-gray-100" />
+            <div className="mt-8 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="h-20 animate-pulse rounded-lg bg-gray-100" />
+              <div className="h-20 animate-pulse rounded-lg bg-gray-100" />
+              <div className="h-20 animate-pulse rounded-lg bg-gray-100" />
+            </div>
+          </div>
+        ) : !currentUser ? (
           // 로그인 안 한 경우
           <div className="bg-white rounded-lg shadow-lg p-6 sm:p-12 text-center">
             <div className="mb-6">
