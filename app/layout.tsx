@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Jua } from "next/font/google";
 import Script from "next/script";
+import ServiceWorkerRegistrar from "./components/ServiceWorkerRegistrar";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -65,6 +66,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} ${jua.variable} antialiased`}
       >
         {children}
+        <ServiceWorkerRegistrar />
         <Script
           src={`https://dapi.kakao.com/v2/maps/sdk.js?appkey=${process.env.NEXT_PUBLIC_KAKAO_JS_KEY}&libraries=services&autoload=false`}
           strategy="afterInteractive"
