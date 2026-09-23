@@ -11,6 +11,7 @@ import DateSchedule from './components/DateSchedule';
 import WordGameTab from './components/WordGame/WordGameTab';
 import PushSetup from './components/PushSetup';
 import RecoveryBanner from './components/RecoveryBanner';
+import { InviteBanner, InviteLinkButton } from './components/InviteLink';
 import LocationEditor from './components/LocationEditor';
 const KakaoMap = dynamic(() => import('./components/KakaoMap'), { ssr: false });
 import { generateRecommendation } from './utils/recommendation';
@@ -1165,7 +1166,17 @@ export default function Home() {
               </h1>
             </div>
             <div className="flex justify-center sm:justify-end items-center gap-2">
-              {restoringSession ? (
+              {!restoringSession && (
+          <InviteBanner
+            isLoggedIn={Boolean(currentUser)}
+            onAccepted={async (inviterNickname) => {
+              alert(`${inviterNickname}님과 친구가 되었어요!`);
+              if (currentUser) await handleLogin(currentUser);
+            }}
+          />
+        )}
+
+        {restoringSession ? (
                 <div className="h-10 w-40 animate-pulse rounded-lg bg-gray-200" aria-label="불러오는 중" />
               ) : (
                 <SimpleLogin
@@ -1457,6 +1468,7 @@ export default function Home() {
                         {isSendingFriendRequest ? '전송 중…' : '친구 추가'}
                       </button>
                     </form>
+                    <InviteLinkButton />
                   </div>
 
                   {/* 내 친구 목록 */}
@@ -1686,6 +1698,26 @@ export default function Home() {
                                         className="text-xs bg-yellow-400 hover:bg-yellow-500 text-yellow-900 font-semibold px-2.5 py-1 rounded-full transition"
                                       >지도 보기 🗺️</a>
                                     </div>
+                                    {/* 역 주변에서 만날 곳 찾기 */}
+                                    <div className="flex flex-wrap gap-1.5 pl-11">
+                                      {[
+                                        { label: '☕ 카페', q: '카페' },
+                                        { label: '🍽️ 맛집', q: '맛집' },
+                                        { label: '🍻 술집', q: '술집' },
+                                        { label: '🎳 놀거리', q: '놀거리' },
+                                      ].map(({ label, q }) => (
+                                        <a
+                                          key={q}
+                                          href={`https://map.kakao.com/?q=${encodeURIComponent(`${station.name} ${q}`)}`}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-full transition"
+                                        >
+                                          {label}
+                                        </a>
+                                      ))}
+                                    </div>
+
                                     {/* 멤버별 가는 법 */}
                                     {mapUserLocations.length > 0 && (
                                       <div className="flex flex-wrap gap-1.5 pl-11">

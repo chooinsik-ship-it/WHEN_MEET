@@ -440,22 +440,41 @@ export default function GroupScheduleModal({
                   <h3 className="text-lg font-bold text-black mb-3">🚇 중간 지점 지하철역 추천</h3>
                   <div className="space-y-2">
                     {subwayRecommendations.map((station, idx) => (
-                      <div
-                        key={idx}
-                        className="flex items-center justify-between p-3 bg-white rounded-lg hover:shadow-md transition"
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
-                            {idx + 1}
+                      <div key={idx} className="p-3 bg-white rounded-lg hover:shadow-md transition">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">
+                              {idx + 1}
+                            </div>
+                            <div>
+                              <p className="font-bold text-black">{station.name}</p>
+                              <p className="text-sm text-gray-600">{station.line}</p>
+                            </div>
                           </div>
-                          <div>
-                            <p className="font-bold text-black">{station.name}</p>
-                            <p className="text-sm text-gray-600">{station.line}</p>
+                          <div className="text-right">
+                            <p className="text-sm text-gray-600">평균 거리</p>
+                            <p className="font-semibold text-green-600">{station.avgDistance.toFixed(1)}km</p>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-sm text-gray-600">평균 거리</p>
-                          <p className="font-semibold text-green-600">{station.avgDistance.toFixed(1)}km</p>
+
+                        {/* 역 주변에서 만날 곳 찾기 */}
+                        <div className="mt-2 flex flex-wrap gap-1.5 pl-11">
+                          {[
+                            { label: '☕ 카페', q: '카페' },
+                            { label: '🍽️ 맛집', q: '맛집' },
+                            { label: '🍻 술집', q: '술집' },
+                            { label: '🗺️ 지도', q: '' },
+                          ].map(({ label, q }) => (
+                            <a
+                              key={label}
+                              href={`https://map.kakao.com/?q=${encodeURIComponent(`${station.name} ${q}`.trim())}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 px-2.5 py-1 rounded-full transition"
+                            >
+                              {label}
+                            </a>
+                          ))}
                         </div>
                       </div>
                     ))}
