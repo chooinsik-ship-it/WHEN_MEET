@@ -2,7 +2,7 @@
  * 아이콘 생성 (PWA 홈 화면 + 브라우저 탭)
  * 실행: npm run build:icons
  *
- * 원본: public/WHENMEET_logo_new_clean.png
+ * 원본: public/WHENMEET_logo_0923.png (1254x1254)
  *
  * 투명 배경으로 뽑으면 작은 크기에서 어색해 보여서, 모든 아이콘을 브랜드 배경색으로 채운다.
  * maskable 아이콘은 안드로이드가 원형/사각으로 잘라내므로 여백(safe zone)을 넣어 생성한다.
@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const here = dirname(fileURLToPath(import.meta.url));
-const SRC = join(here, '..', 'public', 'WHENMEET_logo_new_clean.png');
+const SRC = join(here, '..', 'public', 'WHENMEET_logo_0923.png');
 const OUT = join(here, '..', 'public', 'icons');
 
 /** 브랜드 배경색 (투명 배경을 채워 iOS에서 검게 보이지 않도록) */
