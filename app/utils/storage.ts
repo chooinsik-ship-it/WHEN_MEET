@@ -602,48 +602,114 @@ export async function removeNotification(userId: number, notificationId: string)
   await saveAllNotifications(userId, existing.filter(n => n.id !== notificationId));
 }
 
+/* ------------------------------------------------------------------ 약속 */
+
+const APPOINTMENTS_KEY_PREFIX = 'appointments_';
+
 /**
- * 특정 사용자의 로컈스토리지에 약속 저장 (수락 시)
+ * 약속 목록 불러오기 (서버가 원본, localStorage 는 캐시)
+ * 서버가 비어 있고 로컬에만 있으면 이번 로그인에 자동으로 이전한다.
  */
-export function saveAppointmentForUser(userNickname: string, appointment: Appointment): void {
+export async function loadAppointments(userId: number): Promise<Appointment[]> {
+  const key = `${APPOINTMENTS_KEY_PREFIX}${userId}`;
+  const local: Appointment[] =
+    typeof window !== 'undefined' ? JSON.parse(localStorage.getItem(key) || '[]') : [];
+
   try {
-    const userId = nicknameToId(userNickname);
-    const key = `appointments_${userId}`;
-    if (typeof window !== 'undefined') {
-      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
-      if (!existing.some(a => a.id === appointment.id)) {
-        existing.push(appointment);
-        localStorage.setItem(key, JSON.stringify(existing));
+    const response = await apiFetch(`/api/appointments/${userId}`);
+    if (response.ok) {
+      const data = await response.json();
+      const server: Appointment[] = Array.isArray(data.appointments) ? data.appointments : [];
+
+      if (server.length === 0 && local.length > 0) {
+        await saveMyAppointments(userId, local);
+        return local;
       }
+
+      if (typeof window !== 'undefined') localStorage.setItem(key, JSON.stringify(server));
+      return server;
     }
+  } catch (error) {
+    console.error('약속 불러오기 실패:', error);
+  }
+
+  return local;
+}
+
+/** 내 약속 목록 전체 저장 (서버 + 로컬) */
+export async function saveMyAppointments(userId: number, list: Appointment[]): Promise<void> {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(`${APPOINTMENTS_KEY_PREFIX}${userId}`, JSON.stringify(list));
+  }
+  try {
+    await apiFetch(`/api/appointments/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointments: list }),
+    });
+  } catch (error) {
+    console.error('약속 저장 실패:', error);
+  }
+}
+
+/** 로컬 캐시에도 반영 (같은 브라우저에서 계정을 바꿔 쓰는 경우 대비) */
+function mirrorAppointmentLocally(userId: number, mutate: (list: Appointment[]) => Appointment[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = `${APPOINTMENTS_KEY_PREFIX}${userId}`;
+    const list: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
+    localStorage.setItem(key, JSON.stringify(mutate(list)));
   } catch { /* noop */ }
 }
 
 /**
- * 특정 사용자의 로컈스토리지에서 약속 삭제 (취소 시)
+ * 참여자에게 약속 전달/수정 (서버가 상대 목록에 반영)
+ * 서버는 요청자가 그 약속의 참여자인지, 대상이 친구인지 확인한다.
  */
-export function removeAppointmentForUser(userNickname: string, apptId: string): void {
+export async function saveAppointmentForUser(userNickname: string, appointment: Appointment): Promise<void> {
+  const userId = nicknameToId(userNickname);
+  mirrorAppointmentLocally(userId, (list) =>
+    list.some(a => a.id === appointment.id) ? list : [...list, appointment]
+  );
   try {
-    const userId = nicknameToId(userNickname);
-    const key = `appointments_${userId}`;
-    if (typeof window !== 'undefined') {
-      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
-      localStorage.setItem(key, JSON.stringify(existing.filter(a => a.id !== apptId)));
-    }
-  } catch { /* noop */ }
+    await apiFetch(`/api/appointments/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointment }),
+    });
+  } catch (error) {
+    console.error('약속 전달 실패:', error);
+  }
 }
 
-/**
- * 특정 사용자의 로컈스토리지에서 약속 업데이트 (수락 년이 변경될 때)
- */
-export function updateAppointmentForUser(userNickname: string, appointment: Appointment): void {
+/** 참여자의 약속 갱신 (수락 상태 변경 등) */
+export async function updateAppointmentForUser(userNickname: string, appointment: Appointment): Promise<void> {
+  const userId = nicknameToId(userNickname);
+  mirrorAppointmentLocally(userId, (list) =>
+    list.map(a => (a.id === appointment.id ? appointment : a))
+  );
   try {
-    const userId = nicknameToId(userNickname);
-    const key = `appointments_${userId}`;
-    if (typeof window !== 'undefined') {
-      const existing: Appointment[] = JSON.parse(localStorage.getItem(key) || '[]');
-      const updated = existing.map(a => a.id === appointment.id ? appointment : a);
-      localStorage.setItem(key, JSON.stringify(updated));
-    }
-  } catch { /* noop */ }
+    await apiFetch(`/api/appointments/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ appointment }),
+    });
+  } catch (error) {
+    console.error('약속 갱신 실패:', error);
+  }
+}
+
+/** 참여자의 약속 삭제 (취소·거절) */
+export async function removeAppointmentForUser(userNickname: string, apptId: string): Promise<void> {
+  const userId = nicknameToId(userNickname);
+  mirrorAppointmentLocally(userId, (list) => list.filter(a => a.id !== apptId));
+  try {
+    await apiFetch(`/api/appointments/${userId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ removeId: apptId }),
+    });
+  } catch (error) {
+    console.error('약속 삭제 실패:', error);
+  }
 }

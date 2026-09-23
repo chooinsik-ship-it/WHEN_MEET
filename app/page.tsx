@@ -35,6 +35,8 @@ import {
   saveFriendNicknames,
   linkFriend,
   unlinkFriend,
+  loadAppointments,
+  saveMyAppointments,
   saveAppointmentForUser,
   removeAppointmentForUser,
   updateAppointmentForUser,
@@ -252,10 +254,8 @@ export default function Home() {
     }
 
     // 저장된 약속 불러오기
-    const savedAppointments = localStorage.getItem(`appointments_${user.id}`);
-    if (savedAppointments) {
-      setAppointments(JSON.parse(savedAppointments));
-    }
+    const serverAppointments = await loadAppointments(user.id);
+    setAppointments(serverAppointments);
 
     // 알림 불러오기
     const notifs = await loadNotifications(user.id);
@@ -696,7 +696,7 @@ export default function Home() {
     if (!currentUser) return;
     const updated = appointments.filter(a => a.id !== appt.id);
     setAppointments(updated);
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+    saveMyAppointments(currentUser.id, updated);
 
     // 자신을 제외한 다른 참여자에게 알림 + localStorage에서도 삭제
     const dayName = ['월','화','수','목','금','토','일'][appt.day];
@@ -727,7 +727,7 @@ export default function Home() {
     const updated: Appointment = { ...cancelAppt, ...editAppt, participants: newParticipants, acceptedBy: cancelAppt.acceptedBy ?? [currentUser.nickname] };
     const newList = appointments.map(a => a.id === cancelAppt.id ? updated : a);
     setAppointments(newList);
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(newList));
+    saveMyAppointments(currentUser.id, newList);
     const dayName = ['월','화','수','목','금','토','일'][updated.day];
     // 기존 참여자: 수정 알림
     cancelAppt.participants.filter(p => p !== currentUser.nickname).forEach(nickname => {
@@ -777,7 +777,7 @@ export default function Home() {
     // 나에게만 확정 저장
     const updated = [...appointments, appt];
     setAppointments(updated);
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+    saveMyAppointments(currentUser.id, updated);
 
     // 다른 참여자에게 초대 알림 발송 (수락 전까지 저장 안 함)
     const dayName = ['월','화','수','목','금','토','일'][appt.day];
@@ -801,15 +801,11 @@ export default function Home() {
     const appt = n.appointment;
     const creator = appt.participants[0];
 
-    // 알림에 저장된 acceptedBy는 생성 시점 스냅샷이라 다른 참여자의 수락이 반영 안 됨.
-    // creator의 localStorage에서 최신 acceptedBy를 읽어 베이스로 사용한다.
-    let latestAcceptedBy: string[] = appt.acceptedBy ?? [appt.participants[0]];
-    try {
-      const creatorId = nicknameToId(creator);
-      const creatorAppts: Appointment[] = JSON.parse(localStorage.getItem(`appointments_${creatorId}`) || '[]');
-      const creatorAppt = creatorAppts.find(a => a.id === appt.id);
-      if (creatorAppt?.acceptedBy) latestAcceptedBy = creatorAppt.acceptedBy;
-    } catch { /* noop */ }
+    // 알림의 acceptedBy 는 생성 시점 스냅샷이라 다른 참여자의 수락이 빠져 있다.
+    // 다른 참여자가 수락하면 서버가 내 사본도 갱신하므로, 내 사본을 우선 사용한다.
+    const myCopy = appointments.find(a => a.id === appt.id);
+    const latestAcceptedBy: string[] =
+      myCopy?.acceptedBy ?? appt.acceptedBy ?? [appt.participants[0]];
 
     const updatedAcceptedBy = [...new Set([...latestAcceptedBy, currentUser.nickname])];
     const allAccepted = appt.participants.every(p => updatedAcceptedBy.includes(p));
@@ -820,15 +816,14 @@ export default function Home() {
     };
 
     // 내 localStorage에 저장
-    const existing: Appointment[] = JSON.parse(localStorage.getItem(`appointments_${currentUser.id}`) || '[]');
-    const newList = existing.some(a => a.id === updatedAppt.id)
-      ? existing.map(a => a.id === updatedAppt.id ? updatedAppt : a)
-      : [...existing, updatedAppt];
+    const newList = appointments.some(a => a.id === updatedAppt.id)
+      ? appointments.map(a => a.id === updatedAppt.id ? updatedAppt : a)
+      : [...appointments, updatedAppt];
     setAppointments(prev => prev.some(a => a.id === updatedAppt.id)
       ? prev.map(a => a.id === updatedAppt.id ? updatedAppt : a)
       : [...prev, updatedAppt]
     );
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(newList));
+    saveMyAppointments(currentUser.id, newList);
 
     // 작성자의 localStorage도 acceptedBy 업데이트
     if (creator !== currentUser.nickname) {
@@ -881,7 +876,7 @@ export default function Home() {
     if (!currentUser) return;
     const updated = appointments.filter(a => a.id !== id);
     setAppointments(updated);
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+    saveMyAppointments(currentUser.id, updated);
   };
 
   /**
@@ -907,7 +902,7 @@ export default function Home() {
     };
     const updated = [...appointments, appt];
     setAppointments(updated);
-    localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+    saveMyAppointments(currentUser.id, updated);
     const dayName = ['월','화','수','목','금','토','일'][appt.day];
     groupApptTarget.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
       saveNotification(memberNickname, {
@@ -2078,9 +2073,8 @@ export default function Home() {
             onClick={() => {
               setShowNotifications(!showNotifications);
               if (!showNotifications && currentUser) {
-                // localStorage에서 약속 상태 재동기화 (다른 사용자 수락 시 confirmed 반영)
-                const saved = localStorage.getItem(`appointments_${currentUser.id}`);
-                if (saved) setAppointments(JSON.parse(saved));
+                // 서버에서 약속 상태 재동기화 (다른 참여자의 수락이 반영된다)
+                loadAppointments(currentUser.id).then(setAppointments);
               }
             }}
             className="relative w-12 h-12 bg-white border border-gray-200 rounded-full shadow-lg flex items-center justify-center text-gray-600 hover:text-brand-600 hover:shadow-xl transition cursor-pointer"
@@ -2302,7 +2296,7 @@ export default function Home() {
             };
             const updated = [...appointments, appt];
             setAppointments(updated);
-            localStorage.setItem(`appointments_${currentUser.id}`, JSON.stringify(updated));
+            saveMyAppointments(currentUser.id, updated);
             const dayName = ['월','화','수','목','금','토','일'][appt.day];
             selectedGroup.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
               saveNotification(memberNickname, {
