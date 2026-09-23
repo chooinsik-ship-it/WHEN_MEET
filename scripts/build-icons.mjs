@@ -22,6 +22,7 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
 
   const targets = [
+    { name: 'icon-32.png', size: 32, padding: 0 },
     { name: 'icon-192.png', size: 192, padding: 0 },
     { name: 'icon-512.png', size: 512, padding: 0 },
     { name: 'apple-touch-icon.png', size: 180, padding: 0 },
