@@ -4,7 +4,9 @@
  *
  * 원본: public/WHENMEET_logo_0923.png (1254x1254)
  *
- * 투명 배경으로 뽑으면 작은 크기에서 어색해 보여서, 모든 아이콘을 브랜드 배경색으로 채운다.
+ * 탭·북마크 아이콘: 배경을 채우면 '네모 바탕 위의 동그라미'로 보이므로 투명하게 둔다.
+ * iOS 홈 화면·안드로이드 maskable: 투명이 검정으로 합성되므로 배경을 채운다.
+ * 원본의 투명 여백은 잘라내(trim) 로고가 아이콘을 꽉 채우게 한다.
  * maskable 아이콘은 안드로이드가 원형/사각으로 잘라내므로 여백(safe zone)을 넣어 생성한다.
  * 브라우저 탭용으로 app/icon.png 와 public/favicon.ico 도 같이 만든다.
  */
@@ -26,9 +28,10 @@ async function main() {
   mkdirSync(OUT, { recursive: true });
 
   const targets = [
-    { name: 'icon-32.png', size: 32, padding: 0, opaque: true },
-    { name: 'icon-192.png', size: 192, padding: 0, opaque: true },
-    { name: 'icon-512.png', size: 512, padding: 0, opaque: true },
+    // 브라우저 탭·북마크: 투명 배경 → 동그란 로고만 보인다
+    { name: 'icon-32.png', size: 32, padding: 0, opaque: false },
+    { name: 'icon-192.png', size: 192, padding: 0, opaque: false },
+    { name: 'icon-512.png', size: 512, padding: 0, opaque: false },
     { name: 'apple-touch-icon.png', size: 180, padding: 0, opaque: true },
     // 안드로이드 maskable: 가장자리가 잘려도 로고가 남도록 여백
     { name: 'icon-maskable-512.png', size: 512, padding: 0.2, opaque: true },
@@ -41,6 +44,8 @@ async function main() {
     const offset = Math.round((size - inner) / 2);
 
     const resized = await sharp(SRC)
+      // 원본 가장자리의 투명 여백 제거 → 로고가 아이콘을 꽉 채운다
+      .trim()
       .resize(inner, inner, { fit: 'contain', background })
       .toBuffer();
 
@@ -57,12 +62,12 @@ async function main() {
 
   // --- 브라우저 탭 아이콘 ---
   const appIcon = join(here, '..', 'app', 'icon.png');
-  writeFileSync(appIcon, await render(256, 0, true));
+  writeFileSync(appIcon, await render(256, 0, false));
   console.log('생성: app/icon.png (256x256)');
 
   // ICO 는 PNG 를 그대로 담을 수 있다 (모든 최신 브라우저 지원)
   const icoSizes = [32, 48];
-  const images = await Promise.all(icoSizes.map((s) => render(s, 0, true)));
+  const images = await Promise.all(icoSizes.map((s) => render(s, 0, false)));
 
   const header = Buffer.alloc(6);
   header.writeUInt16LE(0, 0);                 // reserved
