@@ -6,16 +6,11 @@
  * 3) 정적 자원만 캐시 (API 응답과 HTML 은 캐시하지 않아 항상 최신을 받는다)
  */
 
-const CACHE = 'whenmeet-static-v1';
+const CACHE = 'whenmeet-static-v2';
 
 self.addEventListener('install', (event) => {
   // 새 워커를 즉시 활성화
   self.skipWaiting();
-  event.waitUntil(
-    caches.open(CACHE).then((cache) =>
-      cache.addAll(['/icons/icon-192.png', '/icons/icon-512.png']).catch(() => {})
-    )
-  );
 });
 
 self.addEventListener('activate', (event) => {
@@ -35,8 +30,9 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  // 빌드 산출물(해시가 붙어 불변)만 캐시 우선
-  if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
+  // 빌드 산출물(해시가 붙어 불변)만 캐시 우선.
+  // 아이콘은 캐시하지 않는다 — 로고를 교체해도 옛 아이콘이 계속 표시되던 원인.
+  if (url.pathname.startsWith('/_next/static/')) {
     event.respondWith(
       caches.match(request).then((hit) =>
         hit ||
