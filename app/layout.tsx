@@ -26,11 +26,11 @@ export const metadata: Metadata = {
   // 홈 화면에 추가했을 때 쓰이는 아이콘들
   icons: {
     icon: [
-      { url: "/icons/icon-32.png?v=3", sizes: "32x32", type: "image/png" },
-      { url: "/icons/icon-192.png?v=3", sizes: "192x192", type: "image/png" },
-      { url: "/icons/icon-512.png?v=3", sizes: "512x512", type: "image/png" },
+      { url: "/icons/icon-32.png?v=4", sizes: "32x32", type: "image/png" },
+      { url: "/icons/icon-192.png?v=4", sizes: "192x192", type: "image/png" },
+      { url: "/icons/icon-512.png?v=4", sizes: "512x512", type: "image/png" },
     ],
-    apple: [{ url: "/icons/apple-touch-icon.png?v=3", sizes: "180x180", type: "image/png" }],
+    apple: [{ url: "/icons/apple-touch-icon.png?v=4", sizes: "180x180", type: "image/png" }],
   },
   // iOS 는 이 설정이 있어야 홈 화면 앱이 주소창 없이 실행된다 (웹 푸시의 전제 조건)
   appleWebApp: {
