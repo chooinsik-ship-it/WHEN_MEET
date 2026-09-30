@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import OverlapGrid from './OverlapGrid';
-import { loadSchedule, loadDateSchedule, loadUser, Appointment, DateScheduleMap } from '../utils/storage';
+import { loadSchedule, loadDateSchedule, loadUser, Appointment, DateScheduleMap, formatApptWhen } from '../utils/storage';
+import GroupPoll from './GroupPoll';
 import { generateRecommendation } from '../utils/recommendation';
 import { addressToCoordinate, recommendSubwayStations } from '../utils/subway';
 
@@ -20,6 +21,8 @@ interface GroupScheduleModalProps {
   isOpen: boolean;
   onClose: () => void;
   groupName: string;
+  /** 그룹 ID (약속 시간 투표용) */
+  groupId?: string;
   memberNicknames: string[];
   creatorNickname: string;
   appointments?: Appointment[];
@@ -33,6 +36,8 @@ interface GroupScheduleModalProps {
   onInviteMember?: (nickname: string, isFriend: boolean) => void;
   /** 그룹명 수정 시 호출 */
   onGroupNameChange?: (newName: string) => void;
+  /** 투표로 약속이 확정돼 약속 목록을 다시 불러와야 할 때 */
+  onAppointmentsChanged?: () => void;
 }
 
 /**
@@ -56,6 +61,7 @@ export default function GroupScheduleModal({
   isOpen,
   onClose,
   groupName,
+  groupId,
   memberNicknames,
   creatorNickname,
   appointments = [],
@@ -65,6 +71,7 @@ export default function GroupScheduleModal({
   friendNicknames = [],
   onInviteMember,
   onGroupNameChange,
+  onAppointmentsChanged,
 }: GroupScheduleModalProps) {
   const [allSchedules, setAllSchedules] = useState<boolean[][][]>([]);
   const [dateSchedules, setDateSchedules] = useState<DateScheduleMap[]>([]);
@@ -494,12 +501,31 @@ export default function GroupScheduleModal({
                 </div>
               )}
 
+              {/* 약속 시간 투표 */}
+              {groupId && currentUserNickname && (() => {
+                // 생성자가 멤버 목록에도 들어 있는 경우가 있어 이름 기준으로 중복을 없앤다 (시간표 순서 유지)
+                const seen = new Set<string>();
+                const idxs = allMemberNames
+                  .map((name, idx) => ({ name, idx }))
+                  .filter(({ name }) => (seen.has(name) ? false : (seen.add(name), true)));
+                return (
+                  <GroupPoll
+                    groupId={groupId}
+                    groupName={groupName}
+                    members={idxs.map(({ name }) => name)}
+                    schedules={idxs.map(({ idx }) => allSchedules[idx] ?? createEmptySchedule())}
+                    dateSchedules={idxs.map(({ idx }) => dateSchedules[idx] ?? {})}
+                    currentUserNickname={currentUserNickname}
+                    onConfirmed={onAppointmentsChanged}
+                  />
+                );
+              })()}
+
               {/* 확정된 약속 목록 */}
               {appointments.length > 0 && (
                 <div className="mt-6 space-y-2">
                   <h3 className="text-base font-bold text-blue-700 mb-2">📋 확정된 약속</h3>
                   {appointments.map(appt => {
-                    const dayName = ['월','화','수','목','금','토','일'][appt.day];
                     const isPending = appt.status === 'pending';
                     return (
                       <div
@@ -514,7 +540,7 @@ export default function GroupScheduleModal({
                           {isPending && <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-semibold">⏳ 수락 대기중</span>}
                         </div>
                         <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>
-                          {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
+                          {formatApptWhen(appt)}
                         </p>
                         {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>장소 : {appt.place}</p>}
                         <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-500'}`}>참여인원 : {appt.participants.join(', ')}</p>

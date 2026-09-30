@@ -2,6 +2,8 @@
  * Vercel KV 및 로컬 스토리지를 사용한 사용자별 시간표 관리
  */
 
+import type { Poll, PollCandidate, PollVotes } from '../lib/poll';
+
 const STORAGE_KEY_PREFIX = 'whenmeet_schedule_';
 
 /**
@@ -482,6 +484,35 @@ export interface Appointment {
   createdAt: string;
   status?: 'pending' | 'confirmed'; // 전원 수락 시 confirmed
   place?: string; // 약속 장소 (선택)
+  /** 특정 날짜 약속 (YYYY-MM-DD). 없으면 매주 반복되는 요일 약속 */
+  date?: string;
+  /** 투표로 확정된 약속이면 그 투표 ID */
+  pollId?: string;
+}
+
+/**
+ * 주간 시간표에 그릴 약속인지.
+ * 주간 시간표는 요일만 보므로, 날짜 약속은 앞으로 7일 안에 있을 때만 그린다
+ * (그렇지 않으면 매주 반복 약속처럼 보인다).
+ */
+export function showsOnWeekGrid(appt: Pick<Appointment, 'date'>, now: Date = new Date()): boolean {
+  if (!appt.date) return true;
+  const [y, m, d] = appt.date.split('-').map(Number);
+  const target = new Date(y, m - 1, d).getTime();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  return target >= today && target < today + 7 * 24 * 60 * 60 * 1000;
+}
+
+/** "9월 30일(수) 18:00~20:00" 또는 날짜 없는 약속은 "수요일 18:00~20:00" */
+export function formatApptWhen(appt: Pick<Appointment, 'day' | 'startHour' | 'endHour' | 'date'>): string {
+  const hh = (h: number) => `${String(h).padStart(2, '0')}:00`;
+  const time = `${hh(appt.startHour)}~${hh(appt.endHour)}`;
+  if (appt.date) {
+    const [y, m, d] = appt.date.split('-').map(Number);
+    const dow = ['일', '월', '화', '수', '목', '금', '토'][new Date(y, m - 1, d).getDay()];
+    return `${m}월 ${d}일(${dow}) ${time}`;
+  }
+  return `${['월', '화', '수', '목', '금', '토', '일'][appt.day]}요일 ${time}`;
 }
 
 /**
@@ -489,7 +520,7 @@ export interface Appointment {
  */
 export interface AppNotification {
   id: string;
-  type: 'appointment_cancelled' | 'appointment_invite' | 'appointment_accepted' | 'appointment_rejected' | 'friend_request' | 'friend_accepted' | 'friend_rejected' | 'friend_removed';
+  type: 'appointment_cancelled' | 'appointment_invite' | 'appointment_accepted' | 'appointment_rejected' | 'friend_request' | 'friend_accepted' | 'friend_rejected' | 'friend_removed' | 'poll_open' | 'poll_confirmed';
   message: string;
   appointment?: Appointment;
   /** 친구 요청 발신자 닉네임 */
@@ -712,4 +743,49 @@ export async function removeAppointmentForUser(userNickname: string, apptId: str
   } catch (error) {
     console.error('약속 삭제 실패:', error);
   }
+}
+
+/* ------------------------------------------------------------------ 약속 시간 투표 */
+
+export interface PollView {
+  poll: Poll | null;
+  votes: PollVotes;
+}
+
+async function pollRequest(input: string, init?: RequestInit): Promise<PollView> {
+  const response = await apiFetch(input, {
+    ...init,
+    headers: { 'Content-Type': 'application/json' },
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data.error || '요청에 실패했어요.');
+  return { poll: data.poll ?? null, votes: data.votes ?? {} };
+}
+
+export function loadGroupPoll(groupId: string): Promise<PollView> {
+  return pollRequest(`/api/polls?groupId=${encodeURIComponent(groupId)}`);
+}
+
+export function createGroupPoll(input: {
+  groupId: string;
+  groupName: string;
+  title: string;
+  place?: string;
+  duration: number;
+  candidates: PollCandidate[];
+  members: string[];
+}): Promise<PollView> {
+  return pollRequest('/api/polls', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function votePoll(pollId: string, votes: string[]): Promise<PollView> {
+  return pollRequest(`/api/polls/${pollId}`, { method: 'POST', body: JSON.stringify({ votes }) });
+}
+
+export function confirmGroupPoll(pollId: string, key: string): Promise<PollView> {
+  return pollRequest(`/api/polls/${pollId}`, { method: 'PATCH', body: JSON.stringify({ confirm: key }) });
+}
+
+export async function cancelGroupPoll(pollId: string): Promise<void> {
+  await pollRequest(`/api/polls/${pollId}`, { method: 'DELETE' });
 }

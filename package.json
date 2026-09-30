@@ -9,7 +9,9 @@
     "lint": "eslint",
     "test:wordgame": "node --import ./tests/register-ts.mjs --test tests/wordgame.test.ts",
     "test:wordgame:server": "node --import ./tests/register-ts.mjs --experimental-test-module-mocks --test tests/wordgame.server.test.ts",
-    "test": "npm run test:wordgame && npm run test:wordgame:server",
+    "test:poll": "node --import ./tests/register-ts.mjs --test tests/poll.test.ts",
+    "test:poll:server": "node --import ./tests/register-ts.mjs --experimental-test-module-mocks --test tests/poll.server.test.ts",
+    "test": "npm run test:wordgame && npm run test:wordgame:server && npm run test:poll && npm run test:poll:server",
     "build:dictionary": "node --import ./tests/register-ts.mjs scripts/build-dictionary.mjs"
   },
   "dependencies": {

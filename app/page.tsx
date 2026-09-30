@@ -45,6 +45,8 @@ import {
   saveDateSchedule,
   loadDateSchedule,
   DateScheduleMap,
+  formatApptWhen,
+  showsOnWeekGrid,
 } from './utils/storage';
 
 /**
@@ -679,11 +681,10 @@ export default function Home() {
     const accepted = appt.acceptedBy ?? [];
     const pending = appt.participants.filter(p => !accepted.includes(p));
     if (pending.length === 0) return;
-    const dayName = ['월','화','수','목','금','토','일'][appt.day];
     pending.forEach(nickname => {
       saveNotification(nickname, {
         type: 'appointment_invite',
-        message: `🔔 ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 다시 보냈습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        message: `🔔 ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 다시 보냈습니다. (${formatApptWhen(appt)})`,
         appointment: appt,
       });
     });
@@ -700,13 +701,12 @@ export default function Home() {
     saveMyAppointments(currentUser.id, updated);
 
     // 자신을 제외한 다른 참여자에게 알림 + localStorage에서도 삭제
-    const dayName = ['월','화','수','목','금','토','일'][appt.day];
     const others = appt.participants.filter(p => p !== currentUser.nickname);
     others.forEach(nickname => {
       removeAppointmentForUser(nickname, appt.id);
       saveNotification(nickname, {
         type: 'appointment_cancelled',
-        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속을 취소했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속을 취소했습니다. (${formatApptWhen(appt)})`,
       });
     });
 
@@ -726,17 +726,18 @@ export default function Home() {
     const newParticipants = editAppt.participants;
     const addedParticipants = newParticipants.filter(p => !cancelAppt.participants.includes(p));
     const updated: Appointment = { ...cancelAppt, ...editAppt, participants: newParticipants, acceptedBy: cancelAppt.acceptedBy ?? [currentUser.nickname] };
+    // 날짜 약속의 요일을 바꾸면 더 이상 그 날짜가 아니므로 매주 반복 약속으로 바뀐다
+    if (updated.date && editAppt.day !== cancelAppt.day) delete updated.date;
     const newList = appointments.map(a => a.id === cancelAppt.id ? updated : a);
     setAppointments(newList);
     saveMyAppointments(currentUser.id, newList);
-    const dayName = ['월','화','수','목','금','토','일'][updated.day];
     // 기존 참여자: 수정 알림
     cancelAppt.participants.filter(p => p !== currentUser.nickname).forEach(nickname => {
       removeAppointmentForUser(nickname, updated.id);
       saveAppointmentForUser(nickname, updated);
       saveNotification(nickname, {
         type: 'appointment_accepted',
-        message: `✏️ ${currentUser.nickname}님이 [${updated.name}] 약속을 수정했습니다. (${dayName}요일 ${String(updated.startHour).padStart(2,'0')}:00~${String(updated.endHour).padStart(2,'0')}:00)`,
+        message: `✏️ ${currentUser.nickname}님이 [${updated.name}] 약속을 수정했습니다. (${formatApptWhen(updated)})`,
       });
     });
     // 새 참여자: 초대 알림 (상대방 pending 상태로 저장)
@@ -744,7 +745,7 @@ export default function Home() {
       saveAppointmentForUser(nickname, { ...updated, status: 'pending' });
       saveNotification(nickname, {
         type: 'appointment_invite',
-        message: `📩 ${currentUser.nickname}님이 [${updated.name}] 약속에 초대했습니다. (${dayName}요일 ${String(updated.startHour).padStart(2,'0')}:00~${String(updated.endHour).padStart(2,'0')}:00)`,
+        message: `📩 ${currentUser.nickname}님이 [${updated.name}] 약속에 초대했습니다. (${formatApptWhen(updated)})`,
         appointment: { ...updated, status: 'pending' },
       });
     });
@@ -781,11 +782,10 @@ export default function Home() {
     saveMyAppointments(currentUser.id, updated);
 
     // 다른 참여자에게 초대 알림 발송 (수락 전까지 저장 안 함)
-    const dayName = ['월','화','수','목','금','토','일'][appt.day];
     selectedFriends.forEach(friend => {
       saveNotification(friend.nickname, {
         type: 'appointment_invite',
-        message: `📩 ${currentUser.nickname}님이 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        message: `📩 ${currentUser.nickname}님이 [${appt.name}] 약속에 초대했습니다. (${formatApptWhen(appt)})`,
         appointment: appt,
       });
     });
@@ -829,11 +829,10 @@ export default function Home() {
     // 작성자의 localStorage도 acceptedBy 업데이트
     if (creator !== currentUser.nickname) {
       updateAppointmentForUser(creator, updatedAppt);
-      const dayName = ['월','화','수','목','금','토','일'][appt.day];
       saveNotification(creator, {
         type: 'appointment_accepted',
         message: allAccepted
-          ? `🎉 [${appt.name}] 약속에 모든 참여자가 수락했습니다! (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`
+          ? `🎉 [${appt.name}] 약속에 모든 참여자가 수락했습니다! (${formatApptWhen(appt)})`
           : `✅ ${currentUser.nickname}님이 [${appt.name}] 약속을 수락했습니다. (${updatedAcceptedBy.length}/${appt.participants.length}명 수락)`,
       });
     }
@@ -862,10 +861,9 @@ export default function Home() {
     // 작성자에게 거절 알림
     const creator = appt.participants[0];
     if (creator !== currentUser.nickname) {
-      const dayName = ['월','화','수','목','금','토','일'][appt.day];
       saveNotification(creator, {
         type: 'appointment_rejected',
-        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 거절했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        message: `❌ ${currentUser.nickname}님이 [${appt.name}] 약속 초대를 거절했습니다. (${formatApptWhen(appt)})`,
       });
     }
   };
@@ -904,11 +902,10 @@ export default function Home() {
     const updated = [...appointments, appt];
     setAppointments(updated);
     saveMyAppointments(currentUser.id, updated);
-    const dayName = ['월','화','수','목','금','토','일'][appt.day];
     groupApptTarget.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
       saveNotification(memberNickname, {
         type: 'appointment_invite',
-        message: `📬 ${currentUser.nickname}님이 [${groupApptTarget.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+        message: `📬 ${currentUser.nickname}님이 [${groupApptTarget.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${formatApptWhen(appt)})`,
         appointment: appt,
       });
     });
@@ -1062,6 +1059,10 @@ export default function Home() {
       const newNotifItems = latestNotifs.filter(n => !currentNotifs.some(c => c.id === n.id));
       if (newNotifItems.length > 0) {
         setNotifications(latestNotifs);
+        // 투표로 확정된 약속은 서버가 내 약속 목록에 직접 넣어두므로 다시 불러온다
+        if (newNotifItems.some(n => n.type === 'poll_confirmed')) {
+          setAppointments(await loadAppointments(currentUser.id));
+        }
       }
 
       // 새로 추가된 그룹 초대 감지
@@ -1431,7 +1432,7 @@ export default function Home() {
                     schedule={mySchedule}
                     onChange={setMySchedule}
                     title="내 시간표"
-                    appointments={appointments}
+                    appointments={appointments.filter(a => showsOnWeekGrid(a))}
                     onAppointmentClick={(id) => {
                       const appt = appointments.find(a => a.id === id);
                       if (appt) setCancelAppt(appt);
@@ -1822,7 +1823,6 @@ export default function Home() {
                           <h3 className="text-base font-bold text-blue-700 mb-3">📋 확정된 약속</h3>
                           <div className="space-y-2">
                             {appointments.map((appt) => {
-                              const dayName = ['월','화','수','목','금','토','일'][appt.day];
                               const isPending = appt.status === 'pending';
                               return (
                                 <div
@@ -1835,7 +1835,7 @@ export default function Home() {
                                     {isPending && <span className="text-xs bg-yellow-400 text-yellow-900 px-1.5 py-0.5 rounded-full font-semibold">⏳ 수락 대기중</span>}
                                   </div>
                                   <p className={`text-sm mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>
-                                    {dayName}요일 {String(appt.startHour).padStart(2,'0')}:00 ~ {String(appt.endHour).padStart(2,'0')}:00
+                                    {formatApptWhen(appt)}
                                   </p>
                                   {appt.place && <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-600' : 'text-blue-600'}`}>장소 : {appt.place}</p>}
                                   <p className={`text-xs mt-0.5 ${isPending ? 'text-gray-500' : 'text-blue-500'}`}>참여인원 : {appt.participants.join(', ')}</p>
@@ -2261,8 +2261,7 @@ export default function Home() {
                   참여인원 : <span className="font-semibold">{cancelAppt.participants.join(', ')}</span>
                 </p>
                 <p className="text-sm text-gray-700 mb-1">
-                  <span className="font-semibold">{['월','화','수','목','금','토','일'][cancelAppt.day]}요일</span>{' '}
-                  {String(cancelAppt.startHour).padStart(2,'0')}:00 ~ {String(cancelAppt.endHour).padStart(2,'0')}:00
+                  <span className="font-semibold">{formatApptWhen(cancelAppt)}</span>
                 </p>
                 <p className="text-sm font-bold text-blue-600 mb-1">&ldquo;{cancelAppt.name}&rdquo;</p>
                 {cancelAppt.place && (
@@ -2307,6 +2306,7 @@ export default function Home() {
           isOpen={isModalOpen}
           onClose={() => setIsModalOpen(false)}
           groupName={selectedGroup.name}
+          groupId={selectedGroup.id}
           memberNicknames={selectedGroup.members}
           creatorNickname={selectedGroup.creator}
           appointments={appointments.filter(appt =>
@@ -2329,11 +2329,10 @@ export default function Home() {
             const updated = [...appointments, appt];
             setAppointments(updated);
             saveMyAppointments(currentUser.id, updated);
-            const dayName = ['월','화','수','목','금','토','일'][appt.day];
             selectedGroup.members.filter(m => m !== currentUser.nickname).forEach(memberNickname => {
               saveNotification(memberNickname, {
                 type: 'appointment_invite',
-                message: `📩 ${currentUser.nickname}님이 [${selectedGroup.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${dayName}요일 ${String(appt.startHour).padStart(2,'0')}:00~${String(appt.endHour).padStart(2,'0')}:00)`,
+                message: `📩 ${currentUser.nickname}님이 [${selectedGroup.name}] 그룹에서 [${appt.name}] 약속에 초대했습니다. (${formatApptWhen(appt)})`,
                 appointment: appt,
               });
             });
@@ -2343,6 +2342,9 @@ export default function Home() {
           friendNicknames={friends.map(f => f.nickname)}
           onInviteMember={(nickname, isFriend) => handleInviteToGroup(nickname, isFriend)}
           onGroupNameChange={(newName) => handleRenameGroup(selectedGroup.id, newName)}
+          onAppointmentsChanged={async () => {
+            if (currentUser) setAppointments(await loadAppointments(currentUser.id));
+          }}
         />
       )}
       

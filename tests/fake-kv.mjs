@@ -71,5 +71,16 @@ export function createFakeKv() {
     async llen(key) {
       return (store.get(key) ?? []).length;
     },
+
+    async hset(key, fields) {
+      const hash = store.get(key) ?? {};
+      store.set(key, { ...hash, ...clone(fields) });
+      return Object.keys(fields).length;
+    },
+
+    async hgetall(key) {
+      const hash = store.get(key);
+      return hash && Object.keys(hash).length > 0 ? clone(hash) : null;
+    },
   };
 }
